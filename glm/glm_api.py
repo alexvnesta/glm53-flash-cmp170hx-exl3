@@ -5,6 +5,8 @@ One request runs at a time to keep the validated two-GPU memory configuration.
 The model's own Jinja chat template is used without requiring transformers.
 """
 import argparse
+from glm_admission import RequestAdmission, AdmissionPolicy, AdmissionError
+REQUEST_ADMISSION_POLICY = AdmissionPolicy.from_environment()
 import asyncio
 import anyio
 from contextlib import asynccontextmanager
@@ -22,7 +24,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import JSONResponse, RedirectResponse
+from glm_response_cleanup import OwnedJobCleanup, OwnedStreamingResponse
 from jinja2.sandbox import ImmutableSandboxedEnvironment
 from pydantic import BaseModel, ConfigDict, Field
 from glm_profile import CONTEXT_RESERVE, MODEL_CONTEXT_LIMIT, MODEL_ID, PORT, GENERATION_DEFAULTS
@@ -195,7 +198,7 @@ async def lifespan(app):
     env.filters["tojson"] = lambda value, **kwargs: json.dumps(value, **kwargs)
     template = env.from_string((Path(args.model_dir) / "chat_template.jinja").read_text())
     runtime.update(tokenizer=tokenizer, config=config, template=template,
-                   lock=asyncio.Lock(), loaded_at=int(time.time()),
+                   lock=asyncio.Lock(), admission=RequestAdmission(REQUEST_ADMISSION_POLICY), loaded_at=int(time.time()),
                    context_length=min(config.max_position_embeddings,
                                       args.cache_size - CONTEXT_RESERVE))
     from glm_async import responsive_generator_class
@@ -220,7 +223,7 @@ async def lifespan(app):
         from glm_dflash_prefix import enable_prefix_cache
         enable_prefix_cache(runtime["generator"].generator)
         print("GLM DFlash2: previous-request prefix cache enabled (paired host snapshots)", flush=True)
-    print(f"GLM ready: http://0.0.0.0:{args.port}/v1 · context {runtime['context_length']} "
+    print(f"GLM ready: http://127.0.0.1:{args.port}/v1 · context {runtime['context_length']} "
           f"· cache {args.cache_size}", flush=True)
     try:
         yield
@@ -292,7 +295,11 @@ async def health():
             "dynamic_draft_tokens": runtime["draft_options"].adaptive,
             "record_draft_stats": runtime["draft_options"].record_stats,
             "draft_confidence": runtime["draft_options"].confidence,
+            "combined_memory": (getattr(generator, '_glm_combined_memory_coordinator').stats()
+                                if getattr(generator, '_glm_combined_memory_coordinator', None) is not None
+                                else None),
             "busy": runtime["lock"].locked(),
+            "request_queue": runtime["admission"].statistics(),
             "generation_defaults": GENERATION_DEFAULTS}
 
 
@@ -383,9 +390,9 @@ async def complete(body, request, chat):
                    freq_p=body.frequency_penalty, pres_p=body.presence_penalty))
     lock = runtime["lock"]
     try:
-        await asyncio.wait_for(lock.acquire(), timeout=120)
-    except TimeoutError:
-        raise HTTPException(429, "Server busy; retry later")
+        admission_wait = await runtime["admission"].acquire(lock, request)
+    except AdmissionError as error:
+        raise HTTPException(error.status, str(error))
     try:
         if runtime["generator"].error:
             raise HTTPException(503, "Generation engine failed; restart the service")
@@ -403,7 +410,7 @@ async def complete(body, request, chat):
     collected = {"content": "", "reasoning_content": ""}
     usage = {"prompt_tokens": prompt_tokens, "completion_tokens": 0, "total_tokens": prompt_tokens}
     reason = "stop"
-    timings = {}
+    timings = {"http_queue_ms": admission_wait * 1000}
 
     def envelope(choices, streaming=False):
         return {"id": ident, "object": ("chat.completion.chunk" if streaming else "chat.completion")
@@ -411,6 +418,8 @@ async def complete(body, request, chat):
 
     def event(payload):
         return "data: " + json.dumps(payload, ensure_ascii=False) + "\n\n"
+
+    cleanup = OwnedJobCleanup(job.cancel, lock.release)
 
     async def results():
         nonlocal reason
@@ -471,14 +480,7 @@ async def complete(body, request, chat):
                 if (body.stream_options or {}).get("include_usage"):
                     yield {**envelope([], True), "usage": usage}
         finally:
-            try:
-                # StreamingResponse cancels its AnyIO scope on disconnect.
-                # Keep the request lock until the current GPU step finishes and
-                # the native job/page table is safely removed.
-                with anyio.CancelScope(shield=True):
-                    await job.cancel()
-            finally:
-                lock.release()
+            await cleanup.close()
 
     if body.stream:
         async def stream():
@@ -493,7 +495,7 @@ async def complete(body, request, chat):
                 yield event({"error": {"message": "GPU memory exhausted; see service log" if oom
                                        else "Generation failed; see service log",
                                        "type": "server_error", "code": "out_of_memory" if oom else "generation_failed"}})
-        return StreamingResponse(stream(), media_type="text/event-stream",
+        return OwnedStreamingResponse(stream(), cleanup=cleanup, media_type="text/event-stream",
                                  headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
     try:
         async for _ in results():
@@ -567,4 +569,4 @@ if __name__ == "__main__":
     runtime["args"] = args
     # k_hcfuse gates itself on this flag; glm_api always calls install() explicitly.
     os.environ.setdefault(HCFUSE_ENV, "1")
-    uvicorn.run(app, host="0.0.0.0", port=args.port, timeout_graceful_shutdown=5)
+    uvicorn.run(app, host="127.0.0.1", port=args.port, timeout_graceful_shutdown=5)
