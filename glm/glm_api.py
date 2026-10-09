@@ -22,7 +22,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import JSONResponse, RedirectResponse
+from glm_response_cleanup import OwnedJobCleanup, OwnedStreamingResponse
+from glm_admission import RequestAdmission, AdmissionPolicy, AdmissionError
 from jinja2.sandbox import ImmutableSandboxedEnvironment
 from pydantic import BaseModel, ConfigDict, Field
 from glm_profile import CONTEXT_RESERVE, MODEL_CONTEXT_LIMIT, MODEL_ID, PORT, GENERATION_DEFAULTS
@@ -34,6 +36,7 @@ from glm_tp_lifecycle import tp_lifecycle
 from glm_dflash_options import DFlashOptions, summarize_draft_stats
 
 runtime = {}
+REQUEST_ADMISSION_POLICY = AdmissionPolicy.from_environment()
 
 
 # The deployed ExLlamaV3 generator page size is fixed at 256 tokens.
@@ -203,7 +206,7 @@ async def lifespan(app):
         env.filters["tojson"] = lambda value, **kwargs: json.dumps(value, **kwargs)
         template = env.from_string((Path(args.model_dir) / "chat_template.jinja").read_text())
         runtime.update(tokenizer=tokenizer, config=config, template=template,
-                       lock=asyncio.Lock(), loaded_at=int(time.time()),
+                       lock=asyncio.Lock(), admission=RequestAdmission(REQUEST_ADMISSION_POLICY), loaded_at=int(time.time()),
                        context_length=min(config.max_position_embeddings,
                                           args.cache_size - CONTEXT_RESERVE))
         from glm_async import responsive_generator_class
@@ -312,6 +315,7 @@ async def health():
             "record_draft_stats": runtime["draft_options"].record_stats,
             "draft_confidence": runtime["draft_options"].confidence,
             "busy": runtime["lock"].locked(),
+            "request_queue": runtime["admission"].statistics(),
             "generation_defaults": GENERATION_DEFAULTS}
 
 
@@ -402,9 +406,9 @@ async def complete(body, request, chat):
                    freq_p=body.frequency_penalty, pres_p=body.presence_penalty))
     lock = runtime["lock"]
     try:
-        await asyncio.wait_for(lock.acquire(), timeout=120)
-    except TimeoutError:
-        raise HTTPException(429, "Server busy; retry later")
+        admission_wait = await runtime["admission"].acquire(lock, request)
+    except AdmissionError as error:
+        raise HTTPException(error.status, str(error))
     try:
         if runtime["generator"].error:
             raise HTTPException(503, "Generation engine failed; restart the service")
@@ -422,7 +426,7 @@ async def complete(body, request, chat):
     collected = {"content": "", "reasoning_content": ""}
     usage = {"prompt_tokens": prompt_tokens, "completion_tokens": 0, "total_tokens": prompt_tokens}
     reason = "stop"
-    timings = {}
+    timings = {"http_queue_ms": admission_wait * 1000}
 
     def envelope(choices, streaming=False):
         return {"id": ident, "object": ("chat.completion.chunk" if streaming else "chat.completion")
@@ -430,6 +434,8 @@ async def complete(body, request, chat):
 
     def event(payload):
         return "data: " + json.dumps(payload, ensure_ascii=False) + "\n\n"
+
+    cleanup = OwnedJobCleanup(job.cancel, lock.release)
 
     async def results():
         nonlocal reason
@@ -490,14 +496,7 @@ async def complete(body, request, chat):
                 if (body.stream_options or {}).get("include_usage"):
                     yield {**envelope([], True), "usage": usage}
         finally:
-            try:
-                # StreamingResponse cancels its AnyIO scope on disconnect.
-                # Keep the request lock until the current GPU step finishes and
-                # the native job/page table is safely removed.
-                with anyio.CancelScope(shield=True):
-                    await job.cancel()
-            finally:
-                lock.release()
+            await cleanup.close()
 
     if body.stream:
         async def stream():
@@ -512,7 +511,7 @@ async def complete(body, request, chat):
                 yield event({"error": {"message": "GPU memory exhausted; see service log" if oom
                                        else "Generation failed; see service log",
                                        "type": "server_error", "code": "out_of_memory" if oom else "generation_failed"}})
-        return StreamingResponse(stream(), media_type="text/event-stream",
+        return OwnedStreamingResponse(stream(), cleanup=cleanup, media_type="text/event-stream",
                                  headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
     try:
         async for _ in results():

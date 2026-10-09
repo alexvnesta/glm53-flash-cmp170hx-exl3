@@ -26,6 +26,7 @@ from glm_dflash_options import DFlashOptions
 from glm_session_options import session_options
 from glm_tp_options import tp_dflash_options, tp_dflash_health
 from glm_tp_lifecycle import tp_lifecycle
+from glm_admission import RequestAdmission, AdmissionPolicy
 TREE = ast.parse(API.read_text())
 
 
@@ -40,7 +41,8 @@ def api_scope(runtime):
                  MODEL_ID='glm', GENERATION_DEFAULTS={}, cache_format=lambda: 'Q8',
                  DFlashOptions=DFlashOptions, session_options=session_options,
                  tp_dflash_options=tp_dflash_options, tp_dflash_health=tp_dflash_health,
-                 tp_lifecycle=tp_lifecycle)
+                 tp_lifecycle=tp_lifecycle, RequestAdmission=RequestAdmission,
+                 REQUEST_ADMISSION_POLICY=AdmissionPolicy.from_environment())
     class TemplateEnvironment:
         def __init__(self, **kwargs): self.filters = {}
         def from_string(self, text): return text
