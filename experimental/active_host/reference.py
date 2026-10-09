@@ -55,4 +55,3 @@ def stage_reference(indices, *, source_pages, physical_packed_rows,
             out.append(mapping[logical])
         remap.append(tuple(out))
     return ReferenceStage(tuple(remap), packed, scales, mapping)
-
