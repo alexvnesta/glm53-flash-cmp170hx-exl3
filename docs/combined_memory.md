@@ -30,8 +30,8 @@ EXL3_BC_ATTN=0 GLM53_CPU_DUPLICATE_RECYCLE=1 \
   python experimental/active_host/run_trial.py \
   --api glm/glm_api.py --mode combined-memory \
   --build-receipt /PATH/ATTESTED_NATIVE_BUILD.json \
-  --threshold 131072 --host-budget-bytes 5368709120 --no-prefix-cache -- \
-  --dflash-session-cache --target-cpu-cache-gib 2 OTHER_API_ARGUMENTS
+  --threshold 131072 --host-budget-bytes 3221225472 --no-prefix-cache -- \
+  --dflash-session-cache --target-cpu-cache-gib 1 OTHER_API_ARGUMENTS
 ```
 
 Use the native build and input-attestation commands in

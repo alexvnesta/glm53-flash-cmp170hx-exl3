@@ -26,5 +26,7 @@
     "General losslessness, speedup, larger capacity, concurrent requests and reboot behavior not established",
     "Allocated reduction is not reserved-memory or external driver-free release"
   ],
-  "raw_machine_evidence_redistributed": false
+  "raw_machine_evidence_redistributed": false,
+  "target_cpu_pin_request_budget_bytes": 1073741824,
+  "target_cpu_logical_payload_budget_bytes": 807403520
 }

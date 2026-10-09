@@ -1,6 +1,16 @@
 {
   "engine_source_scope": "16a49792a3c93d8432d72e6c4bce800841566577",
   "excluded": "models, weights, native binaries, copied dependency headers, JIT caches, raw machine evidence and remote/service controllers",
+  "experimental_runtime_sha256": {
+    "experimental/active_host/attention_safety.py": "e1f74b1c783d19e2e955644bd38253412a4ed7db0adca6a12be7afbf66a0e8f1",
+    "experimental/active_host/contracts.py": "e4568d3ae386a337799a27282cb7654b41c6f7138d860bd73a02353a383cc0db",
+    "experimental/active_host/engine_adapter.py": "7414cd8a8c8f06403a1b225d46c8bba6237b6509de752f89e0a7a1bc3b5864e9",
+    "experimental/active_host/engine_inputs.py": "dc4ef6a80b531a03059b83203fbd56daad6cee606849c89ae59e81982caea2ca",
+    "experimental/active_host/native/selected_host_q8.cpp": "6ffef8bc7e1f70cbe6c11b92b74da40bedbcbd8bc268c0946f5e4b02370a5213",
+    "experimental/active_host/native/selected_host_q8.cu": "9cd8ca57aea0885e5657c4a32111d2a831886e4ef01981133552152b4966a62a",
+    "experimental/active_host/run_trial.py": "e49b7f06d8b83054185fc2d660759ba7cbaadc65e0a5316c94210b6dfbd123ee",
+    "experimental/active_host/selected_host_q8.py": "336639a4dfaf096d97abd86e3c9f5e6d1cd192df77a3cd2233e95fb627542051"
+  },
   "license": "MIT",
   "qualification": "Bounded live scope in qualification_summary.json; portable CPU/source scope remains distinct.",
   "runtime_sha256": {
