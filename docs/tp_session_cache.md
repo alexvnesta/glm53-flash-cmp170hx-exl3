@@ -72,7 +72,7 @@ unrelated cold C, resume B, real SSE cancellation D and recovery B. It requires
 actual host spill/restoration and matching full choices/semantic token counts.
 Start with 65,536 target-cache tokens and two approximately 40,000-token sessions.
 For 393,216/220,000 use a 2GiB target budget initially and confirm that reported
-slot capacity exceeds the required overflow pages. The current-dev engine/API has bounded live prefix-mode qualification described below. The new multi-session CPU-pressure tier remains pending.
+slot capacity exceeds the required overflow pages. The current-dev engine/API has bounded live prefix-mode qualification described below. The later 64Ki multi-session pressure pilot restored retained prefixes but failed a following cold-marker semantic check, documented below.
 
 Active sparse-latent host migration remains unsupported in TP. The LS adapter
 binds actual layer tensors/native attention objects in one process; TP places
@@ -111,7 +111,7 @@ with different whole choices and reasoning/output allocation. Those are profile
 throughput observations, not isolated-kernel speedups or equivalent work.
 Target-only versus DFlash continuation has stable full-output mismatches on
 bounded fixtures. Actual-layer diagnostics localized some Q1/Q8 arithmetic
-differences but did not establish a universal parity fix. The current-dev multi-session pressure tier still needs its own exact-source live trial; older legacy TP receipts do not qualify that host-transfer lifecycle. No lossless
+differences but did not establish a universal parity fix. The current-dev multi-session pressure tier needs further diagnosis after its bounded 64Ki pilot failed a following semantic check; older legacy TP receipts do not qualify that host-transfer lifecycle. No lossless
 upstream TP PR is proposed by this branch.
 
 ## Current-dev prefix-mode live result, 2026-10-09
@@ -133,7 +133,29 @@ gain is descriptive; it does not establish isolated-kernel speedup, equal work,
 complete count/LRU answers, general quality or speculative losslessness.
 
 This campaign used previous-request prefix mode. The newly combined TP
-multi-session target CPU-pressure tier remains pending and is not qualified by
-this pass. The controller owner supplied the live result. Sanitized geometry
+multi-session target CPU-pressure tier is not qualified by this prefix-mode pass. Its later 64Ki pilot failed a following semantic check, as recorded below. The controller owner supplied the live result. Sanitized geometry
 and source/build pins are in [qualification_summary.json](qualification_summary.json);
 raw machine logs, IPC paths, binaries and process receipts are excluded.
+
+## 64Ki multi-session pilot failed a following semantic check
+
+A separate target-only RAM pressure pilot used 65536 cache tokens. Cold A/B each
+rendered 40018 prompt tokens; retained A/B and post-cancel B recovery reported
+39936 cached tokens and passed their exact saved answer checks. That retention
+result is narrower than the overall service behavior.
+
+The next five short/16K probe requests completed HTTP successfully, but the cold
+`short_markers` request failed semantic validation. It had 66 prompt tokens,
+79 completion tokens, cached_tokens=0 and finish reason `stop`. Its visible
+answer repeated the four markers and included literal assistant/think control
+pieces. This is an observed malformed answer, not a transport failure or a
+successful semantic check. The full 384Ki pressure stage was skipped, and the
+original service was restored at 2026-10-09T17:16:46Z.
+
+The cause is unresolved. No direct paired snapshot or target CPU fetch occurred
+on that failing cold request according to the recorded counters; that alone
+does not prove the tier was uninvolved or identify a numerical/state cause.
+Do not promote multi-session TP as generally qualified, lossless or a universal
+performance upgrade from the prefix-mode and retention passes. Keep this
+failure visible during diagnosis and require matched fresh controls before
+attributing it to a particular layer of the implementation.

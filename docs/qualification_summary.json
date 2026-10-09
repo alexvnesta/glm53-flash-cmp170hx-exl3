@@ -24,14 +24,32 @@
   "semantic_probes_passed": 5,
   "prefix_ringwrap_cancel_recovery_steps_passed": 15,
   "queue_and_orphan_response_canary": "passed",
-  "multi_session_target_cpu_pressure": "pending",
+  "multi_session_target_cpu_pressure": "64Ki retention pilot passed, following cold marker semantic check failed; full384Ki skipped",
   "limits": [
     "Profile gain is not an isolated kernel speedup or equivalent work",
     "1024-token capped count/LRU responses do not prove complete task quality",
     "Target-only/DFlash general continuation equivalence remains unqualified",
-    "New TP multi-session target CPU pressure and host DMA lifecycle remain pending",
-    "No active-latent TP migration, simultaneous active requests, larger context or boot qualification"
+    "No active-latent TP migration, simultaneous active requests, larger context or boot qualification",
+    "New TP multi-session pressure path has a following cold-marker semantic failure; general qualification is withheld"
   ],
   "scope": "Current-dev native probes and bounded prefix-mode model lifecycle supplied by sole controller owner.",
-  "raw_machine_evidence_redistributed": false
+  "raw_machine_evidence_redistributed": false,
+  "multi_session_64k_pilot": {
+    "cache_tokens": 65536,
+    "public_context_tokens": 65280,
+    "session_prompt_tokens": 40018,
+    "warm_cached_tokens": 39936,
+    "pressure_lifecycle": "coldA/coldB/resumeA/coldC/resumeB/cancelD/recoverB passed",
+    "following_http_probes_completed": 5,
+    "following_semantic_status": "failed",
+    "failing_case": "short_markers",
+    "failing_case_cached_tokens": 0,
+    "failing_case_prompt_tokens": 66,
+    "failing_case_completion_tokens": 79,
+    "failing_case_finish_reason": "stop",
+    "failure": "Repeated marker answer containing literal assistant/think control pieces",
+    "full384Ki_pressure_trial": "skipped on semantic failure",
+    "original_service_restoration_utc": "2026-10-09T17:16:46Z",
+    "interpretation": "Retention pass is not overall semantic qualification. Causation/root cause unresolved."
+  }
 }
