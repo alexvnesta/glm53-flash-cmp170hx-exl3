@@ -406,8 +406,11 @@ def attach_target_cpu_tier(generator, max_bytes, factory=None):
     tier = factory([generator.cache], max_bytes)
     try:
         tier.attach(generator.pagetable)
-    except BaseException:
-        tier.close()
+    except BaseException as error:
+        try:
+            tier.close()
+        except BaseException as cleanup_error:
+            error.add_note(f"CPU tier cleanup also failed: {cleanup_error!r}")
         raise
     generator.cpu_page_cache = generator.pagetable.cpu_tier = tier
     return tier
@@ -416,17 +419,34 @@ def attach_target_cpu_tier(generator, max_bytes, factory=None):
 def enable_session_cache(generator, max_bytes=1024**3, max_checkpoints=8,
                          target_cpu_bytes=0, namespace="", tier_factory=None):
     """Install locally gated hooks after caches load and before any enqueue."""
-    if generator.num_remaining_jobs() or getattr(generator, "_glm_dflash_prefix_cache", None) is not None:
+    pagetable = getattr(generator, "pagetable", None)
+    if (generator.num_remaining_jobs() or getattr(generator, "active_jobs", ())
+            or getattr(generator, "pending_jobs", ()) or getattr(generator, "job_serial", 0)
+            or getattr(generator, "_glm_dflash_prefix_cache", None) is not None
+            or getattr(generator, "cpu_page_cache", None) is not None
+            or getattr(pagetable, "cpu_tier", None) is not None
+            or getattr(pagetable, "referenced_pages", {})):
         raise ValueError("Session cache must be installed on a fresh idle generator")
     validate_engine_sources()
+    from exllamav3.generator.generator import Generator
+    if not isinstance(generator, Generator):
+        raise ValueError("Session cache requires the pinned native Generator")
     manager = MultiSessionCache(generator, max_bytes, max_checkpoints, namespace)
-    tier = attach_target_cpu_tier(generator, target_cpu_bytes, tier_factory)
+    original_defrag = generator.enable_defrag
+    had_manager = hasattr(generator, "_glm_dflash_prefix_cache")
+    original_manager = getattr(generator, "_glm_dflash_prefix_cache", None)
+    tier = None
+    installed_hooks = []
     try:
+        # Session identities require stable physical pages. Native Generator
+        # defaults this flag to True; disable it in this fresh-owned transaction
+        # before the optional target tier validates/attaches its fixed geometry.
+        generator.enable_defrag = False
+        tier = attach_target_cpu_tier(generator, target_cpu_bytes, tier_factory)
         # Reuse the already-qualified previous-request wrapper call order. Its
         # dynamic manager lookup also preserves the previous-request rollback mode.
         from glm_dflash_prefix import enable_prefix_cache
         from exllamav3.generator.job import Job
-        from exllamav3.generator.generator import Generator
         enable_prefix_cache(generator)
         if not getattr(Job.maybe_stash_recurrent, "_glm_dflash_session_stash", False):
             original_stash = Job.maybe_stash_recurrent
@@ -439,6 +459,7 @@ def enable_session_cache(generator, max_bytes=1024**3, max_checkpoints=8,
 
             stash_hook._glm_dflash_session_stash = True
             Job.maybe_stash_recurrent = stash_hook
+            installed_hooks.append((Job, "maybe_stash_recurrent", original_stash, stash_hook))
         if not getattr(Generator.clear_queue, "_glm_dflash_session_clear", False):
             original_clear = Generator.clear_queue
 
@@ -450,12 +471,25 @@ def enable_session_cache(generator, max_bytes=1024**3, max_checkpoints=8,
 
             clear_hook._glm_dflash_session_clear = True
             Generator.clear_queue = clear_hook
+            installed_hooks.append((Generator, "clear_queue", original_clear, clear_hook))
         generator._glm_dflash_prefix_cache = manager
-        generator.enable_defrag = False
-    except BaseException:
-        generator._glm_dflash_prefix_cache = None
+    except BaseException as error:
+        generator.enable_defrag = original_defrag
+        if had_manager:
+            generator._glm_dflash_prefix_cache = original_manager
+        elif hasattr(generator, "_glm_dflash_prefix_cache"):
+            del generator._glm_dflash_prefix_cache
+        for owner, name, original, installed in reversed(installed_hooks):
+            if getattr(owner, name) is installed:
+                setattr(owner, name, original)
         if tier is not None:
-            tier.close()
-            generator.cpu_page_cache = generator.pagetable.cpu_tier = None
+            if generator.cpu_page_cache is tier:
+                generator.cpu_page_cache = None
+            if generator.pagetable.cpu_tier is tier:
+                generator.pagetable.cpu_tier = None
+            try:
+                tier.close()
+            except BaseException as cleanup_error:
+                error.add_note(f"CPU tier cleanup also failed: {cleanup_error!r}")
         raise
     return manager

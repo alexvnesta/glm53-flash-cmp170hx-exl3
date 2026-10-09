@@ -8,6 +8,7 @@ Raw copies remain upstream, with a fixed per-device stream/thread contract.
 from collections import deque
 import hashlib
 import importlib
+import json
 import os
 from pathlib import Path
 import threading
@@ -113,7 +114,22 @@ class LazyTargetCPUPageCache(native.CPUPageCache):
                     or generator.max_batch_size != 1 or generator.enable_defrag
                     or pagetable.max_pages != max_pages or len(pagetable.all_pages) != max_pages
                     or any(t.shape[0] != max_pages for t, _, _, _ in self.segments)):
-                raise ValueError("Duplicate recycling requires fixed serialized LS page geometry")
+                mismatched = [dict(segment=i, device=str(t.device), pages=t.shape[0])
+                              for i, (t, _, _, _) in enumerate(self.segments)
+                              if t.shape[0] != max_pages]
+                snapshot = dict(enable_defrag=generator.enable_defrag,
+                                max_batch_size=generator.max_batch_size,
+                                model_loaded_tp=generator.model.loaded_tp,
+                                generator_cache_matches=generator.cache is self._target_cache,
+                                model_owner_matches=generator.model is self._target_cache.model,
+                                pagetable_cache_matches=pagetable.cache is self._target_cache,
+                                expected_pages=max_pages, pagetable_pages=pagetable.max_pages,
+                                physical_page_count=len(pagetable.all_pages),
+                                segment_count=len(self.segments),
+                                mismatched_segments=mismatched[:8],
+                                mismatched_segment_count=len(mismatched))
+                raise ValueError("Duplicate recycling requires fixed serialized LS page geometry: "
+                                 + json.dumps(snapshot, sort_keys=True))
             self._page_geometry = (pagetable, pagetable.all_pages, max_pages,
                                    tuple(id(page) for page in pagetable.all_pages))
             self._generator_owner = generator
