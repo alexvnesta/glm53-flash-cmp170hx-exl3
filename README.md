@@ -106,6 +106,9 @@ without changing loader placement; see [prefill controls](docs/prefill_chunk.md)
 Optional [adaptive DFlash rounds and stats](docs/adaptive_dflash.md) are
 experimental and disabled by default. Fixed K7 remains the default.
 
+Experimental [completed-session retention and inactive target KV spill](docs/session_cache.md)
+are disabled by default. They preserve one active request and GPU-resident attention.
+
 ## How the memory budget works
 
 The 384K Q8 profile is the largest layout that fits on 2× 64 GB with this
