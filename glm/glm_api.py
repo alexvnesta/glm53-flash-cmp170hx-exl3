@@ -28,6 +28,8 @@ from pydantic import BaseModel, ConfigDict, Field
 from glm_profile import CONTEXT_RESERVE, MODEL_CONTEXT_LIMIT, MODEL_ID, PORT, GENERATION_DEFAULTS
 from glm_tools import prepare_tools, ToolSplitter
 from glm_paths import KERNELS_DIR, HCFUSE_ENV, HCFUSE_CHECK_ENV
+from glm_session_options import session_options
+from glm_dflash_options import DFlashOptions, summarize_draft_stats
 
 runtime = {}
 
@@ -158,6 +160,8 @@ async def lifespan(app):
     from exllamav3 import AsyncGenerator, GreedySampler, model_init
     args = runtime["args"]
     serving_chunk_size = prefill_chunk_size(args)
+    retention = session_options(args)
+    draft_options = DFlashOptions.from_environment()
     if getattr(args, "q8_staging", False):
         from glm_q8_staging import install
         install()
@@ -168,6 +172,8 @@ async def lifespan(app):
         from glm_q8_layout import keep_mtp_cache_fp16
         keep_mtp_cache_fp16()
     dflash = bool(args.draft_model_dir) and not args.mtp
+    if not dflash and (draft_options.adaptive or draft_options.record_stats):
+        raise ValueError("DFlash diagnostics/options require a DFlash2 drafter")
     if dflash:
         from glm_dflash import bounded_draft_cache, pin_drafter
         bounded_draft_cache()
@@ -197,7 +203,19 @@ async def lifespan(app):
         model=model, cache=cache, tokenizer=tokenizer, sampler=GreedySampler(),
         draft_model=draft_model, draft_cache=draft_cache,
         num_draft_tokens=args.num_draft_tokens, max_batch_size=1,
-        max_chunk_size=serving_chunk_size, recurrent_checkpoint_interval=2048)
+        max_chunk_size=serving_chunk_size, recurrent_checkpoint_interval=2048,
+        recurrent_cache_size=retention.recurrent_bytes,
+        **draft_options.generator_kwargs(num_draft_tokens=args.num_draft_tokens))
+    runtime["draft_options"] = draft_options
+    if retention.enabled:
+        from glm_dflash_sessions import enable_session_cache
+        enable_session_cache(runtime["generator"].generator,
+                             max_bytes=retention.paired_bytes,
+                             max_checkpoints=retention.max_checkpoints,
+                             target_cpu_bytes=retention.target_cpu_bytes,
+                             namespace=str(Path(args.model_dir).resolve()))
+        print("GLM DFlash2: bounded completed-session retention enabled; "
+              f"target CPU tier ceiling {retention.target_cpu_bytes} bytes (pins only on page eviction)", flush=True)
     if dflash and getattr(args, "dflash_prefix_cache", False):
         from glm_dflash_prefix import enable_prefix_cache
         enable_prefix_cache(runtime["generator"].generator)
@@ -207,7 +225,12 @@ async def lifespan(app):
     try:
         yield
     finally:
-        await runtime["generator"].close()
+        try:
+            await runtime["generator"].close()
+        finally:
+            manager = getattr(runtime["generator"].generator, "_glm_dflash_prefix_cache", None)
+            if retention.enabled and manager is not None:
+                manager.close()
 
 
 app = FastAPI(title="GLM-5.3-Flash EXL3 API", version="1.0", lifespan=lifespan,
@@ -264,6 +287,11 @@ async def health():
             "draft_ring_tokens": getattr(draft_cache, "dflash_ring_tokens", None),
             "prompt_cache_reuse": not dflash or prefix_cache is not None,
             "prompt_cache": prefix_cache.stats() if prefix_cache is not None else None,
+            "target_cpu_cache_budget_bytes": getattr(runtime["args"], "target_cpu_cache_gib", 0) * 1024**3,
+            "recurrent_cache_budget_bytes": generator.recurrent_cache_size,
+            "dynamic_draft_tokens": runtime["draft_options"].adaptive,
+            "record_draft_stats": runtime["draft_options"].record_stats,
+            "draft_confidence": runtime["draft_options"].confidence,
             "busy": runtime["lock"].locked(),
             "generation_defaults": GENERATION_DEFAULTS}
 
@@ -424,6 +452,8 @@ async def complete(body, request, chat):
                     usage["prompt_tokens_details"] = {"cached_tokens": cached_tokens}
                     timings.update(prompt_n=prompt_tokens, predicted_n=usage["completion_tokens"],
                                    source="exllamav3", cached_tokens=cached_tokens, cache_n=cached_tokens)
+                    if runtime["draft_options"].record_stats:
+                        timings["draft_stats"] = summarize_draft_stats(job.job.draft_stats)
                     if result.get("accepted_draft_tokens") is not None:
                         accepted = result["accepted_draft_tokens"]
                         drafted = accepted + result.get("rejected_draft_tokens", 0)
@@ -508,9 +538,21 @@ if __name__ == "__main__":
                         help="Keep the MTP draft layer cache FP16")
     parser.add_argument("--dflash-prefix-cache", action="store_true",
                         help="Opt in to previous-request DFlash prefix reuse with paired host snapshots")
+    parser.add_argument("--dflash-session-cache", action="store_true",
+                        help="Experimental bounded multi-session paired prefix retention (LS, one active request)")
+    parser.add_argument("--target-cpu-cache-gib", type=int, default=0,
+                        help="Target-only idle page spill ceiling in GiB; 0 disables; pins page slabs only on eviction")
+    parser.add_argument("--recurrent-cache-gib", type=int, default=4,
+                        help="Native recurrent checkpoint ceiling in GiB (default unchanged: 4)")
+    parser.add_argument("--session-cache-gib", type=int, default=1,
+                        help="Combined paired native checkpoint/draft snapshot retention ceiling in GiB")
+    parser.add_argument("--session-cache-max-checkpoints", type=int, default=8,
+                        help="Maximum retained paired checkpoint boundaries (at least 2)")
     args = parser.parse_args()
     try:
         prefill_chunk_size(args)
+        session_options(args)
+        DFlashOptions.from_environment()
     except ValueError as error:
         parser.error(str(error))
     if not ((args.mtp and not args.draft_model_dir and args.num_draft_tokens == 2)

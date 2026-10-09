@@ -21,6 +21,9 @@ from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parent.parent
 API = ROOT / 'glm/glm_api.py'
+sys.path.insert(0, str(ROOT/'glm'))
+from glm_dflash_options import DFlashOptions
+from glm_session_options import session_options
 TREE = ast.parse(API.read_text())
 
 
@@ -32,7 +35,8 @@ def api_scope(runtime):
         n.decorator_list = []
     scope = dict(runtime=runtime, PREFILL_PAGE_SIZE=256, sys=sys, os=os, asyncio=asyncio,
                  Path=Path, time=time, json=json, KERNELS_DIR=ROOT, CONTEXT_RESERVE=256,
-                 MODEL_ID='glm', GENERATION_DEFAULTS={}, cache_format=lambda: 'Q8')
+                 MODEL_ID='glm', GENERATION_DEFAULTS={}, cache_format=lambda: 'Q8',
+                 DFlashOptions=DFlashOptions, session_options=session_options)
     class TemplateEnvironment:
         def __init__(self, **kwargs): self.filters = {}
         def from_string(self, text): return text
