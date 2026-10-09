@@ -8,6 +8,13 @@ process-local monkeypatch that is enabled only while this server runs.
 
 English README (this file) · [한국어 README](README.ko.md)
 
+The publication candidate adds [bounded HTTP admission and response cleanup](docs/http_lifecycle.md).
+The default single-request GPU ownership remains in place.
+
+The optional [combined LS memory mode](docs/combined_memory.md) coordinates
+completed-session retention with selected-latent host migration. It remains
+explicitly enabled through the experimental launcher.
+
 ## What is included
 
 | Component | Path | Notes |

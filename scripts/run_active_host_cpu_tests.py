@@ -15,6 +15,8 @@ def main():
     env["EXLLAMAV3_ENGINE_ROOT"] = str(args.engine_root.resolve(strict=True))
     env["CUDA_VISIBLE_DEVICES"] = ""
     program = """import unittest,json,sys
+from pathlib import Path
+sys.path.insert(0,str(Path.cwd().parents[1]/'glm'))
 before='torch' in sys.modules
 result=unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.discover('.'))
 after='torch' in sys.modules

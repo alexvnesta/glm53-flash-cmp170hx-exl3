@@ -13,6 +13,7 @@ import os
 from pathlib import Path
 import threading
 import torch
+from glm_pin_budget import pin_request_bytes
 
 import exllamav3.generator.cpu_cache as native
 
@@ -57,6 +58,8 @@ class LazyTargetCPUPageCache(native.CPUPageCache):
         self._generator_owner = None
         self._prefer_referenced_duplicates = recycle == "1"
         self._page_geometry = self._segment_geometry = self._transfer_owner = None
+        self._layout_coordinator = None
+        self._layout_suspended = False
         self.tp_groups = []
         self.tp = False
         self.segments = []
@@ -74,7 +77,9 @@ class LazyTargetCPUPageCache(native.CPUPageCache):
         if not offset:
             raise ValueError("No paged target cache tensors")
         self.slab_size = self.slot_size = align(offset, 4096)
-        self.max_slots = max_size // self.slot_size
+        self.pin_request_size = pin_request_bytes(self.slab_size)
+        self.max_slots = max_size // self.pin_request_size
+        self.pin_request_budget = self.max_slots * self.pin_request_size
         if self.max_slots < 2:
             raise ValueError("Target CPU tier must hold at least two complete page images")
         self.pagetable = None
@@ -150,6 +155,8 @@ class LazyTargetCPUPageCache(native.CPUPageCache):
         operate on disjoint ranges. The serialized single worker also owns page
         metadata through allocation; health reads do not claim or evict pages.
         """
+        if self._layout_suspended:
+            raise ValueError('Target page transfers forbidden during host latent layout')
         if not self._prefer_referenced_duplicates:
             return
         if self._page_geometry is None:
@@ -172,6 +179,53 @@ class LazyTargetCPUPageCache(native.CPUPageCache):
             self._transfer_owner = owner
         elif self._transfer_owner != owner:
             raise ValueError("Duplicate recycling transfer thread/stream changed")
+
+    def bind_layout_coordinator(self, coordinator):
+        if (self._layout_coordinator is not None or not self._prefer_referenced_duplicates
+                or coordinator.generator is not self._generator_owner
+                or coordinator.tier is not self or self._layout_suspended):
+            raise ValueError('Fresh owned duplicate tier required for layout coordination')
+        self._layout_coordinator = coordinator
+        self._layout_schema = tuple((offset, page_shape, dtype, str(t.device), tuple(t.shape))
+                                    for t, offset, page_shape, dtype in self.segments)
+
+    def suspend_gpu_segments(self, coordinator):
+        if coordinator is not self._layout_coordinator or self._layout_suspended:
+            raise ValueError('Foreign or duplicate target layout transition')
+        self._check_transfer_owner()
+        # Drain every fixed segment stream before dropping the last tier tensor
+        # references. A prior fetch/store must not outlive its GPU source.
+        for device, _ in current_transfer_streams(self.segments):
+            with torch.cuda.device(device):
+                if torch.cuda.is_current_stream_capturing():
+                    raise RuntimeError('Tier layout transitions cannot occur in capture')
+                torch.cuda.current_stream(torch.device(device)).synchronize()
+        self.segments = []
+        self._layout_suspended = True
+
+    def resume_gpu_segments(self, coordinator):
+        if coordinator is not self._layout_coordinator or not self._layout_suspended:
+            raise ValueError('Foreign or missing target layout transition')
+        tensors = tuple(t for t in self._target_cache.get_all_tensors() if t is not None)
+        if len(tensors) != len(self._layout_schema):
+            raise ValueError('Restored target segment count changed')
+        rebuilt = []
+        for tensor, (offset, page_shape, dtype, device, shape) in zip(tensors, self._layout_schema):
+            if (str(tensor.device) != device or tuple(tensor.shape) != shape
+                    or tensor.dtype != dtype or tuple(tensor.shape[1:]) != page_shape):
+                raise ValueError('Restored target segment schema changed')
+            rebuilt.append((tensor, offset, page_shape, dtype))
+        # The coordinator has checked cache/page ownership and each published
+        # field against newly allocated real GPU tensors before this rebind.
+        coordinator.validate_gpu_rebind(tensors)
+        # Check the original stream/thread before publishing transfer segments.
+        owner = (threading.get_ident(), current_transfer_streams(rebuilt))
+        if owner != self._transfer_owner:
+            raise ValueError('Duplicate recycling transfer thread/stream changed during rebind')
+        self.segments = rebuilt
+        self._segment_geometry = self._segments_signature()
+        self._layout_suspended = False
+        self._check_transfer_owner()
 
     def _referenced_duplicate(self, phash, entry):
         pt = self.pagetable
@@ -220,11 +274,15 @@ class LazyTargetCPUPageCache(native.CPUPageCache):
     def pinned_bytes(self):
         return len(self.slot_slabs) * self.slab_size
 
+    @property
+    def pin_requested_bytes(self):
+        return len(self.slot_slabs) * self.pin_request_size
+
     def _make_slab(self):
         if self._growth_disabled:
             raise HostAllocationUnavailable("Host pin growth disabled after an allocation failure")
         try:
-            slab = torch.empty((self.slab_size,), dtype=torch.uint8, pin_memory=True)
+            slab = torch.empty((self.pin_request_size,), dtype=torch.uint8, pin_memory=True)
         except (MemoryError, RuntimeError) as error:
             message = str(error).lower()
             if (not isinstance(error, MemoryError) and not any(s in message for s in

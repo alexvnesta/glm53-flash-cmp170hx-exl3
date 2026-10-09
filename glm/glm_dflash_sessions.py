@@ -374,6 +374,10 @@ class MultiSessionCache(PreviousRequestCache):
                         "budget_slots": tier.max_slots, "slot_bytes": tier.slot_size,
                         "slab_budget_bytes": tier.max_slots * tier.slot_size,
                         "reserved_budget_bytes": tier.max_slots * tier.slot_size,
+                        "pin_request_slot_bytes": getattr(tier, 'pin_request_size', tier.slot_size),
+                        "pin_request_budget_bytes": getattr(tier, 'pin_request_budget', tier.max_slots * tier.slot_size),
+                        "pin_requested_bytes": getattr(tier, 'pin_requested_bytes', 0),
+                        "budget_scope": "owned_pinned_requests; tensor_payload_reported_separately",
                         "pinned_bytes": getattr(tier, "pinned_bytes", len(tier.slot_slabs) * tier.slab_size),
                         "token_snapshot_bytes": sum(e["tokens"].numel() * e["tokens"].element_size()
                                                     for e in tuple(tier.entries.values())),

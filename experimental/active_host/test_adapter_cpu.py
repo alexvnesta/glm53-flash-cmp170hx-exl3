@@ -18,6 +18,11 @@ class Tensor:
         result=1
         for n in self.shape:result*=n
         return result
+    def __getitem__(self,index):
+        end=index.stop if isinstance(index,slice) else 1
+        return Tensor((end,),device=self.device.type)
+    def view(self,*shape):
+        self.shape=tuple(shape);return self
 
 
 class Torch:

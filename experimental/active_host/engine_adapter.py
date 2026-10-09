@@ -20,12 +20,19 @@ class TrialPolicy:
     context_threshold: int = 131072
     host_budget_bytes: int = 3 * 2**30
     per_layer_staging_bytes: int = 16 * 2**20
+    activation_mode: str = 'context_threshold'
+    pressure_free_bytes: int = 0
 
     def validate(self):
         if self.context_threshold <= 2048 or self.context_threshold % 256:
             raise ValueError("explicit sparse context threshold must be >2048 and256 aligned")
         if self.host_budget_bytes <= 0 or self.per_layer_staging_bytes <= 0:
             raise ValueError("positive bounded host and staging budgets required")
+        if self.activation_mode not in ('context_threshold', 'context_and_pressure'):
+            raise ValueError('Explicit context_threshold or context_and_pressure policy required')
+        if (type(self.pressure_free_bytes) is not int or self.pressure_free_bytes < 0
+                or (self.activation_mode == 'context_and_pressure' and not self.pressure_free_bytes)):
+            raise ValueError('Pressure mode requires a positive measured driver-free threshold')
 
 
 @dataclass
@@ -39,16 +46,23 @@ class LayerState:
 
 
 class ActiveHostTrialAdapter:
-    def __init__(self, generator, extension, *, policy=TrialPolicy()):
+    def __init__(self, generator, extension, *, policy=TrialPolicy(), coordinator=None):
         policy.validate()
         if not policy.enabled:
             raise RuntimeError("active host trial is disabled by default")
         # Validate topology/lifecycle BEFORE importing Torch or allocating memory.
-        if (generator.max_batch_size != 1 or generator.model.loaded_tp or
-                generator.cpu_page_cache is not None or
-                getattr(generator.pagetable,'cpu_tier',None) is not None or
-                getattr(generator,"_glm_dflash_prefix_cache",None) is not None):
-            raise ValueError("first trial requires LS batch1, no CPUPageCache or session/prefix manager")
+        if generator.max_batch_size != 1 or generator.model.loaded_tp:
+            raise ValueError('Active host requires LS batch1')
+        if coordinator is None:
+            if (generator.cpu_page_cache is not None or
+                    getattr(generator.pagetable,'cpu_tier',None) is not None or
+                    getattr(generator,"_glm_dflash_prefix_cache",None) is not None):
+                raise ValueError("Standalone trial requires no CPUPageCache or session/prefix manager")
+        else:
+            from glm_memory_coordinator import CombinedMemoryCoordinator
+            if not isinstance(coordinator, CombinedMemoryCoordinator):
+                raise ValueError('Explicit combined-memory owner required')
+            coordinator.validate_for_adapter(generator)
         if os.environ.get('EXL3_BC_ATTN') != '0':
             raise ValueError("first engine adapter requires explicitly disabled BC attention")
         import torch
@@ -73,18 +87,37 @@ class ActiveHostTrialAdapter:
                     tuple(layer.qk.shape[1:])!=(256,128) or
                     tuple(layer.sk.shape[1:])!=(256,16)):
                 raise ValueError("only current Q8 NoPE full-indexer geometry is supported")
+        from glm_pin_budget import pin_request_bytes
         required=sum(l.qk.numel()*4+l.sk.numel()*2 for l in layers.values())
-        if required>policy.host_budget_bytes:
-            raise ValueError("whole-arena migration exceeds aggregate host budget")
+        pin_required=sum(pin_request_bytes(l.qk.numel()*4)+pin_request_bytes(l.sk.numel()*2)
+                         for l in layers.values())
+        if pin_required>policy.host_budget_bytes:
+            raise ValueError("whole-arena owned pinned requests exceed aggregate host budget")
         self.torch,self.attention_class=torch,MLAttention
         self.generator,self.extension,self.policy=generator,extension,policy
         self.host_bytes,self.layers=required,dict(layers)
+        self.host_pin_request_bytes=pin_required
+        self.coordinator=coordinator
         self.states={}
         self.active=False
         self.epoch=0
         self.lock=threading.RLock()
         self.installed=False
         self.originals={}
+
+    def _activation_allowed(self, position):
+        if position < self.policy.context_threshold:
+            return False
+        if self.policy.activation_mode == 'context_threshold':
+            return True
+        self._outside_capture()
+        free={str(i):int(self.torch.cuda.mem_get_info(i)[0]) for i in (0,1)}
+        allowed=min(free.values()) <= self.policy.pressure_free_bytes
+        print(json.dumps({'event':'active_host_admission','activation_mode':self.policy.activation_mode,
+            'context_position':position,'minimum_context':self.policy.context_threshold,
+            'driver_free_bytes':free,'pressure_free_bytes':self.policy.pressure_free_bytes,
+            'admitted':allowed},sort_keys=True),flush=True)
+        return allowed
 
     def _outside_capture(self):
         if self.torch.cuda.is_current_stream_capturing():
@@ -119,9 +152,11 @@ class ActiveHostTrialAdapter:
             if self.active:return
             self._check_attention_safety()
             g=self.generator
-            if (getattr(g,'_glm_dflash_prefix_cache',None) is not None or
-                    g.cpu_page_cache is not None or
-                    getattr(g.pagetable,'cpu_tier',None) is not None):
+            coordinator=getattr(self,'coordinator',None)
+            if coordinator is not None:
+                coordinator._owner()
+            elif (getattr(g,'_glm_dflash_prefix_cache',None) is not None or
+                    g.cpu_page_cache is not None or getattr(g.pagetable,'cpu_tier',None) is not None):
                 raise RuntimeError("ownership manager was enabled after adapter installation")
             if len(g.active_jobs)!=1 or g.pending_jobs:
                 raise RuntimeError("migration requires one active request and no pending job")
@@ -129,9 +164,10 @@ class ActiveHostTrialAdapter:
             if (len(job.sequences)!=1 or not job.sequences[0].prefill_complete or
                     job.is_requeued or job.orig_max_rq_tokens is not None):
                 raise RuntimeError("migration requires completed prefill and no requeue")
-            if job.sequences[0].kv_position<self.policy.context_threshold:
+            if not self._activation_allowed(job.sequences[0].kv_position):
                 return
             from selected_host_q8 import SelectedHostQ8
+            from glm_pin_budget import allocate_pinned_view
             prepared={}
             self.epoch+=1
             before={str(i):self.torch.cuda.memory_allocated(i) for i in (0,1)}
@@ -142,10 +178,10 @@ class ActiveHostTrialAdapter:
                     device=layer.qk.device
                     with self.torch.cuda.device(device):
                         self.torch.cuda.current_stream(device).synchronize()
-                        host_q=self.torch.empty(layer.qk.shape,dtype=self.torch.int32,
-                                                device='cpu',pin_memory=True)
-                        host_s=self.torch.empty(layer.sk.shape,dtype=self.torch.float16,
-                                                device='cpu',pin_memory=True)
+                        host_q,_=allocate_pinned_view(self.torch,tuple(layer.qk.shape),
+                                                    dtype=self.torch.int32,element_size=4)
+                        host_s,_=allocate_pinned_view(self.torch,tuple(layer.sk.shape),
+                                                    dtype=self.torch.float16,element_size=2)
                         host_q.copy_(layer.qk)
                         host_s.copy_(layer.sk)
                         stager=SelectedHostQ8(self.extension,host_q,host_s,
@@ -164,13 +200,28 @@ class ActiveHostTrialAdapter:
                 prepared.clear()
                 raise
             # Plain field swaps only; all mapped host storage already exists.
-            for state in prepared.values():
-                state.layer.qk,state.layer.sk=state.stager.q_alias,state.stager.s_alias
-            self.states=prepared
-            self.active=True
+            previous={key:(state.layer.qk,state.layer.sk) for key,state in prepared.items()}
+            try:
+                if coordinator is not None:coordinator.prepare_host_commit()
+                for state in prepared.values():
+                    state.layer.qk,state.layer.sk=state.stager.q_alias,state.stager.s_alias
+                self.states=prepared
+                self.active=True
+                if coordinator is not None:coordinator.host_committed()
+            except BaseException:
+                for key,(q,s) in previous.items():
+                    prepared[key].layer.qk,prepared[key].layer.sk=q,s
+                self.states={};self.active=False
+                if coordinator is not None and coordinator.tier._layout_suspended:
+                    coordinator.abort_host_commit()
+                raise
+            previous.clear()  # No tier or rollback reference may retain GPU latent storage.
             after={str(i):self.torch.cuda.memory_allocated(i) for i in (0,1)}
             print(json.dumps({'event':'active_host_migrated','layout_epoch':self.epoch,
                 'host_bytes':self.host_bytes,'GPU_latent_bytes_replaced':self.host_bytes,
+                'host_pin_request_bytes':getattr(self,'host_pin_request_bytes',self.host_bytes),
+                'host_pin_request_budget_bytes':self.policy.host_budget_bytes,
+                'activation_mode':self.policy.activation_mode,
                 'allocated_before':before,'allocated_after':after,
                 'actual_allocated_reduction_bytes':sum(before.values())-sum(after.values()),
                 'GPU_indexer_unchanged':True,'capacity_tokens':g.cache.max_num_tokens,
@@ -201,8 +252,11 @@ class ActiveHostTrialAdapter:
                     q.copy_(state.stager.host_q)
                     s.copy_(state.stager.host_s)
                     replacements[key]=(q,s)
+            coordinator=getattr(self,'coordinator',None)
+            if coordinator is not None:coordinator.prepare_gpu_commit(replacements)
             for key,(q,s) in replacements.items():
                 self.states[key].layer.qk,self.states[key].layer.sk=q,s
+            if coordinator is not None:coordinator.gpu_committed()
             for state in self.states.values():state.stager.close()
             self.states.clear()
             self.active=False
@@ -283,6 +337,8 @@ class ActiveHostTrialAdapter:
 
             def cancel_hook(instance,*args,**kwargs):
                 with adapter.lock:
+                    if getattr(adapter,'coordinator',None) is not None:
+                        adapter.coordinator._worker()
                     adapter.deactivate()
                     return originals['cancel'](*args,**kwargs)
 
@@ -337,4 +393,100 @@ def install_constructor_hook(extension, *, policy):
                         self._gpu_worker,self._active_host_adapter.close)
                 await super().close()
         return TrialGenerator
+    glm_async.responsive_generator_class=factory
+
+
+def install_combined_constructor_hook(extension, *, policy):
+    """Session installation runs first; only its owned tier may join active decode.
+
+    Cancellation GPU cleanup stays on the same persistent worker. The native
+    AsyncGenerator bookkeeping is pinned separately and remains on the loop.
+    """
+    if not policy.enabled:raise RuntimeError('Explicit combined opt-in required')
+    import hashlib
+    from pathlib import Path
+    import exllamav3.generator.async_generator as async_native
+    expected='6ea1be7f5cf662958441f642129c27fc4404366123b1a6aa835ba9233550ce6a'
+    if hashlib.sha256(Path(async_native.__file__).read_bytes()).hexdigest()!=expected:
+        raise RuntimeError('Combined cancellation requires pinned native async bookkeeping')
+    import glm_async
+    import glm_dflash_sessions
+    from glm_memory_coordinator import CombinedMemoryCoordinator
+    original_factory=glm_async.responsive_generator_class
+    original_enable=glm_dflash_sessions.enable_session_cache
+
+    def enable(generator,*args,**kwargs):
+        original_defrag=generator.enable_defrag
+        manager=original_enable(generator,*args,**kwargs)
+        coordinator=None;adapter=None
+        try:
+            coordinator=CombinedMemoryCoordinator(generator,manager,generator.cpu_page_cache)
+            adapter=ActiveHostTrialAdapter(generator,extension,policy=policy,coordinator=coordinator)
+            coordinator.bind_adapter(adapter)
+            adapter.install()
+            coordinator.install_lifecycle()
+            return manager
+        except BaseException as error:
+            # Startup failed; no requests were admitted. Restore locally owned
+            # hooks/tier references, then fail startup rather than serving half-mode.
+            for cleanup in ((coordinator.close if coordinator is not None else None),
+                            (adapter.close if adapter is not None and adapter.installed else None),
+                            manager.close):
+                if cleanup is not None:
+                    try:cleanup()
+                    except BaseException as cleanup_error:
+                        error.add_note(f'Combined startup cleanup failed: {cleanup_error!r}')
+            tier=generator.cpu_page_cache
+            if tier is not None and getattr(tier,'_generator_owner',None) is generator:
+                generator.cpu_page_cache=None
+                if generator.pagetable.cpu_tier is tier:generator.pagetable.cpu_tier=None
+                try:tier.close()
+                except BaseException as cleanup_error:
+                    error.add_note(f'Combined startup tier cleanup failed: {cleanup_error!r}')
+            if getattr(generator,'_glm_dflash_prefix_cache',None) is manager:
+                del generator._glm_dflash_prefix_cache
+            generator.enable_defrag=original_defrag
+            raise
+
+    def factory(base):
+        original_cls=original_factory(base)
+        class CombinedGenerator(original_cls):
+            async def cancel(self,job):
+                import asyncio
+                from glm_worker_cleanup import drain_owned_future
+                async with self._step_lock:
+                    cancelled=False
+                    if self.error is None:
+                        future=asyncio.get_running_loop().run_in_executor(
+                            self._gpu_worker,self.generator.cancel,job.job)
+                        try:
+                            await drain_owned_future(future)
+                        except asyncio.CancelledError:
+                            cancelled=True
+                        except Exception as error:
+                            self.error=error
+                            for pending in self.jobs.values():pending.put_result(error)
+                            self.jobs.clear()
+                            raise
+                    if job.job in self.jobs:
+                        del self.jobs[job.job]
+                        job.put_result(async_native._CANCELLED_SENTINEL)
+                    if cancelled:raise asyncio.CancelledError
+
+            async def close(self):
+                import asyncio
+                from glm_worker_cleanup import drain_owned_future
+                async def finish():
+                    async with self._step_lock:
+                        coordinator=getattr(self.generator,'_glm_combined_memory_coordinator',None)
+                        if coordinator is not None:
+                            def close_owned():
+                                coordinator.ensure_gpu('async_close')
+                                coordinator.adapter.close()
+                                coordinator.close()
+                            await asyncio.get_running_loop().run_in_executor(self._gpu_worker,close_owned)
+                    await super(CombinedGenerator,self).close()
+                await drain_owned_future(asyncio.create_task(finish()))
+        return CombinedGenerator
+    glm_dflash_sessions.enable_session_cache=enable
     glm_async.responsive_generator_class=factory
