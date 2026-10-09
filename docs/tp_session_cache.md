@@ -70,8 +70,8 @@ not asynchronous DMA, graphs, full-model parity or performance. The TP HTTP
 pilot saves exact requests and raw responses, then performs cold A/B, resume A,
 unrelated cold C, resume B, real SSE cancellation D and recovery B. It requires
 actual host spill/restoration and matching full choices/semantic token counts.
-Start with65,536 target-cache tokens and two approximately40,000-token sessions.
-For393,216/220,000 use a2GiB target budget initially and confirm that reported
+Start with 65,536 target-cache tokens and two approximately 40,000-token sessions.
+For 393,216/220,000 use a 2GiB target budget initially and confirm that reported
 slot capacity exceeds the required overflow pages. No live qualification of
 this combined current-dev candidate has been performed by this agent.
 
