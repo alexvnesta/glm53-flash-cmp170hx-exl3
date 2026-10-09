@@ -17,6 +17,7 @@ def main():
     env=os.environ.copy()
     env["EXLLAMAV3_ENGINE_ROOT"]=str(source)
     env["CUDA_VISIBLE_DEVICES"]=""
+    env["GLM53_CPU_DUPLICATE_RECYCLE"]="0"
     program="""import unittest,json,torch
 before=torch.cuda.is_initialized()
 result=unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.discover('tests'))
