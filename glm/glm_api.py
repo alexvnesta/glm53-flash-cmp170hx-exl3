@@ -28,6 +28,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from glm_profile import CONTEXT_RESERVE, MODEL_CONTEXT_LIMIT, MODEL_ID, PORT, GENERATION_DEFAULTS
 from glm_tools import prepare_tools, ToolSplitter
 from glm_paths import KERNELS_DIR, HCFUSE_ENV, HCFUSE_CHECK_ENV
+from glm_dflash_options import DFlashOptions, summarize_draft_stats
 
 runtime = {}
 
@@ -158,6 +159,7 @@ async def lifespan(app):
     from exllamav3 import AsyncGenerator, GreedySampler, model_init
     args = runtime["args"]
     serving_chunk_size = prefill_chunk_size(args)
+    draft_options = DFlashOptions.from_environment()
     if getattr(args, "q8_staging", False):
         from glm_q8_staging import install
         install()
@@ -168,6 +170,8 @@ async def lifespan(app):
         from glm_q8_layout import keep_mtp_cache_fp16
         keep_mtp_cache_fp16()
     dflash = bool(args.draft_model_dir) and not args.mtp
+    if not dflash and (draft_options.adaptive or draft_options.record_stats):
+        raise ValueError("DFlash diagnostics/options require a DFlash2 drafter")
     if dflash:
         from glm_dflash import bounded_draft_cache, pin_drafter
         bounded_draft_cache()
@@ -197,7 +201,9 @@ async def lifespan(app):
         model=model, cache=cache, tokenizer=tokenizer, sampler=GreedySampler(),
         draft_model=draft_model, draft_cache=draft_cache,
         num_draft_tokens=args.num_draft_tokens, max_batch_size=1,
-        max_chunk_size=serving_chunk_size, recurrent_checkpoint_interval=2048)
+        max_chunk_size=serving_chunk_size, recurrent_checkpoint_interval=2048,
+        **draft_options.generator_kwargs(num_draft_tokens=args.num_draft_tokens))
+    runtime["draft_options"] = draft_options
     if dflash and getattr(args, "dflash_prefix_cache", False):
         from glm_dflash_prefix import enable_prefix_cache
         enable_prefix_cache(runtime["generator"].generator)
@@ -264,6 +270,9 @@ async def health():
             "draft_ring_tokens": getattr(draft_cache, "dflash_ring_tokens", None),
             "prompt_cache_reuse": not dflash or prefix_cache is not None,
             "prompt_cache": prefix_cache.stats() if prefix_cache is not None else None,
+            "dynamic_draft_tokens": runtime["draft_options"].adaptive,
+            "record_draft_stats": runtime["draft_options"].record_stats,
+            "draft_confidence": runtime["draft_options"].confidence,
             "busy": runtime["lock"].locked(),
             "generation_defaults": GENERATION_DEFAULTS}
 
@@ -424,6 +433,8 @@ async def complete(body, request, chat):
                     usage["prompt_tokens_details"] = {"cached_tokens": cached_tokens}
                     timings.update(prompt_n=prompt_tokens, predicted_n=usage["completion_tokens"],
                                    source="exllamav3", cached_tokens=cached_tokens, cache_n=cached_tokens)
+                    if runtime["draft_options"].record_stats:
+                        timings["draft_stats"] = summarize_draft_stats(job.job.draft_stats)
                     if result.get("accepted_draft_tokens") is not None:
                         accepted = result["accepted_draft_tokens"]
                         drafted = accepted + result.get("rejected_draft_tokens", 0)
@@ -511,6 +522,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     try:
         prefill_chunk_size(args)
+        DFlashOptions.from_environment()
     except ValueError as error:
         parser.error(str(error))
     if not ((args.mtp and not args.draft_model_dir and args.num_draft_tokens == 2)

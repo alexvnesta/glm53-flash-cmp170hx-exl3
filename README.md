@@ -103,6 +103,9 @@ Prefill chunks follow the loader `--chunk_size` by default. An optional
 `--prefill-chunk-size` or `GLM53_PREFILL_CHUNK_SIZE` cap changes serving chunks
 without changing loader placement; see [prefill controls](docs/prefill_chunk.md).
 
+Optional [adaptive DFlash rounds and stats](docs/adaptive_dflash.md) are
+experimental and disabled by default. Fixed K7 remains the default.
+
 ## How the memory budget works
 
 The 384K Q8 profile is the largest layout that fits on 2× 64 GB with this
