@@ -1,0 +1,37 @@
+{
+  "date": "2026-10-09",
+  "status": "bounded_current_dev_tp_prefix_runtime_qualification",
+  "official_base": "6cd89a908d957afba1cd1659fcf7d99a9e56d776",
+  "engine_head": "c8666fbbc58d8731b97b972cedf681d0953beddd",
+  "native_extension_sha256": "f0e2cfae624390782b22dd9253b882724487c2211ed8b703895c5a170ed1511c",
+  "cache_tokens": 393216,
+  "native_gpu_probe_checks_passed": 8,
+  "matched_throughput_measured_requests": 6,
+  "output_cap_tokens": 1024,
+  "cached_tokens_all_measured": 0,
+  "rounds_per_prompt": 3,
+  "fixture_sha256": "e17b354863a2da6b15831c93fd23efcef2d95facf275fe3b5c8136cf74bedd38",
+  "median_decode_tok_s": {
+    "counting": 123.22944326435932,
+    "concurrent_lru_reasoning": 44.11537815348137
+  },
+  "separate_fresh_ls_median_decode_tok_s": {
+    "counting": 96.22260546766772,
+    "concurrent_lru_reasoning": 34.23087937184559
+  },
+  "profile_axes": "TP+BC1+GEMV/INT8_GEMV=0 compared with LS+BC0+ordinary GEMV settings",
+  "whole_choices_equal_to_ls": false,
+  "semantic_probes_passed": 5,
+  "prefix_ringwrap_cancel_recovery_steps_passed": 15,
+  "queue_and_orphan_response_canary": "passed",
+  "multi_session_target_cpu_pressure": "pending",
+  "limits": [
+    "Profile gain is not an isolated kernel speedup or equivalent work",
+    "1024-token capped count/LRU responses do not prove complete task quality",
+    "Target-only/DFlash general continuation equivalence remains unqualified",
+    "New TP multi-session target CPU pressure and host DMA lifecycle remain pending",
+    "No active-latent TP migration, simultaneous active requests, larger context or boot qualification"
+  ],
+  "scope": "Current-dev native probes and bounded prefix-mode model lifecycle supplied by sole controller owner.",
+  "raw_machine_evidence_redistributed": false
+}

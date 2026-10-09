@@ -72,8 +72,7 @@ unrelated cold C, resume B, real SSE cancellation D and recovery B. It requires
 actual host spill/restoration and matching full choices/semantic token counts.
 Start with 65,536 target-cache tokens and two approximately 40,000-token sessions.
 For 393,216/220,000 use a 2GiB target budget initially and confirm that reported
-slot capacity exceeds the required overflow pages. No live qualification of
-this combined current-dev candidate has been performed by this agent.
+slot capacity exceeds the required overflow pages. The current-dev engine/API has bounded live prefix-mode qualification described below. The new multi-session CPU-pressure tier remains pending.
 
 Active sparse-latent host migration remains unsupported in TP. The LS adapter
 binds actual layer tensors/native attention objects in one process; TP places
@@ -112,7 +111,29 @@ with different whole choices and reasoning/output allocation. Those are profile
 throughput observations, not isolated-kernel speedups or equivalent work.
 Target-only versus DFlash continuation has stable full-output mismatches on
 bounded fixtures. Actual-layer diagnostics localized some Q1/Q8 arithmetic
-differences but did not establish a universal parity fix. The current-dev
-combined session path needs a new exact-source live trial; older legacy TP
-receipts do not qualify its native ABI or host-transfer lifecycle. No lossless
+differences but did not establish a universal parity fix. The current-dev multi-session pressure tier still needs its own exact-source live trial; older legacy TP receipts do not qualify that host-transfer lifecycle. No lossless
 upstream TP PR is proposed by this branch.
+
+## Current-dev prefix-mode live result, 2026-10-09
+
+The exact current-dev engine and matching native extension loaded the full
+393216-token model profile. Eight real native GPU checks, six alternating
+1024-output throughput requests (three per prompt, all with cached_tokens=0), five short/16K
+semantic checks, a 15-step prefix/ring-wrap/cancel-recovery sequence, and the
+queue/orphan-response canary passed. Native extension SHA256 is
+`f0e2cfae624390782b22dd9253b882724487c2211ed8b703895c5a170ed1511c`.
+This is current-dev bounded model/native evidence, not only the historical
+stock1.5.4 result or CPU build evidence.
+
+Median decode rates were 123.229 tok/s for counting and 44.115 tok/s for the
+concurrency LRU prompt, against fresh LS profile medians 96.223 and 34.231 tok/s.
+The saved requests/settings matched, but whole choices differed and the profiles
+also differed in TP, BC and GEMV settings. The roughly 28–29% observed profile
+gain is descriptive; it does not establish isolated-kernel speedup, equal work,
+complete count/LRU answers, general quality or speculative losslessness.
+
+This campaign used previous-request prefix mode. The newly combined TP
+multi-session target CPU-pressure tier remains pending and is not qualified by
+this pass. The controller owner supplied the live result. Sanitized geometry
+and source/build pins are in [qualification_summary.json](qualification_summary.json);
+raw machine logs, IPC paths, binaries and process receipts are excluded.
