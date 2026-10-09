@@ -29,6 +29,7 @@ from glm_profile import CONTEXT_RESERVE, MODEL_CONTEXT_LIMIT, MODEL_ID, PORT, GE
 from glm_tools import prepare_tools, ToolSplitter
 from glm_paths import KERNELS_DIR, HCFUSE_ENV, HCFUSE_CHECK_ENV
 from glm_session_options import session_options
+from glm_tp_options import tp_dflash_options, tp_dflash_health
 from glm_dflash_options import DFlashOptions, summarize_draft_stats
 
 runtime = {}
@@ -160,6 +161,7 @@ async def lifespan(app):
     from exllamav3 import AsyncGenerator, GreedySampler, model_init
     args = runtime["args"]
     serving_chunk_size = prefill_chunk_size(args)
+    tp_opt_in = tp_dflash_options(args)
     retention = session_options(args)
     draft_options = DFlashOptions.from_environment()
     if getattr(args, "q8_staging", False):
@@ -182,6 +184,10 @@ async def lifespan(app):
     print(f"Loading GLM: GPU 0+1, full VRAM, {method} + k_hcfuse", flush=True)
     model, config, cache, tokenizer, draft_model, _, draft_cache = model_init.init(
         args, quiet=True, progress=False)
+    if tp_opt_in:
+        if (not model.loaded_tp or draft_model is None
+                or getattr(draft_model.config, "experimental_tensor_parallel", False) is not True):
+            raise ValueError("The engine did not enable the requested typed TP DFlash2 configuration")
     sys.path.insert(0, str(KERNELS_DIR))
     import k_hcfuse
     k_hcfuse.install(model)
@@ -284,6 +290,8 @@ async def health():
             "mtp_depth": 0 if dflash else 2,
             "speculative_method": "dflash2" if dflash else "mtp",
             "draft_num_tokens": getattr(runtime["args"], "num_draft_tokens", None) or 2,
+            "experimental_tp_dflash2": tp_dflash_health(generator),
+            "target_tp": bool(generator.model.loaded_tp),
             "draft_ring_tokens": getattr(draft_cache, "dflash_ring_tokens", None),
             "prompt_cache_reuse": not dflash or prefix_cache is not None,
             "prompt_cache": prefix_cache.stats() if prefix_cache is not None else None,
