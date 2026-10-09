@@ -2,7 +2,7 @@
   "engine_source_scope": "16a49792a3c93d8432d72e6c4bce800841566577",
   "excluded": "models, weights, native binaries, copied dependency headers, JIT caches, raw machine evidence and remote/service controllers",
   "license": "MIT",
-  "qualification": "Source/CPU test scope only here. Live controller owner supplies a separate exact-source bounded qualification summary.",
+  "qualification": "Bounded live scope in qualification_summary.json; portable CPU/source scope remains distinct.",
   "runtime_sha256": {
     "glm/glm_admission.py": "f79671cd20df02db89c5341e4391ead413494cede45a73e17b6ba75d70f729dc",
     "glm/glm_api.py": "1f0192595e6e62f2467acfa7371cc32f03b01f522f6f6e43497d4ebaa8bb9b30",

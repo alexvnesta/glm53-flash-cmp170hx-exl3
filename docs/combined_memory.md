@@ -68,3 +68,27 @@ layout epochs. A bounded synthetic pass does not establish general
 losslessness, speedup, higher context capacity, concurrent sessions or reboot
 recovery. Live qualification summaries should identify exact source/native
 pins and tested geometry before this optional mode is promoted.
+
+## Bounded live result, 2026-10-09
+
+A full 393216-token initial-cache comparison used the same completed-session
+retention and target CPU tier in both arms, with active latent migration enabled
+only in the candidate. Six pressure-lifecycle responses and five short/16K
+semantic probes passed; their full choices and semantic usage matched between
+arms. The large A/B sessions each rendered 219992 prompt tokens, and retained
+requests reported 219904 cached tokens. Five ordered migration/return epochs
+replaced/restored 2353004544 B of latent payload, requesting 3137339392 B of
+pinned extents within a 3221225472 B active budget. Each epoch reduced live
+`torch.cuda.memory_allocated` by 2246632960 B (about 2.09 GiB). Reserved memory
+and externally available driver-free memory are separate quantities.
+
+The measured activation policy was `context_threshold`, threshold 131072.
+The short unfinished cancellation D followed by cached B recovery passed, but
+D did not qualify cancellation while latent host aliases were active.
+Driver-pressure admission, active-layout cancellation and live checkpoint
+failure paths remain separate pending trials. This bounded pass establishes
+neither general losslessness nor a throughput/capacity or boot guarantee.
+The controller owner supplied this result and reports its independent offline
+audit passed. [qualification_summary.json](qualification_summary.json) records
+the sanitized geometry; raw journals, process metadata and binaries stay out
+of Git. Runtime files in this clean copy match the tested candidate hashes.

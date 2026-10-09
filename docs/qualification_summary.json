@@ -1,0 +1,30 @@
+{
+  "date": "2026-10-09",
+  "status": "bounded_combined_ls_runtime_qualification",
+  "engine_source": "16a49792a3c93d8432d72e6c4bce800841566577",
+  "cache_tokens": 393216,
+  "public_context_tokens": 392960,
+  "max_chunk_size": 2048,
+  "activation_mode": "context_threshold",
+  "threshold_tokens": 131072,
+  "host_pin_request_budget_bytes": 3221225472,
+  "host_pin_request_bytes": 3137339392,
+  "latent_payload_bytes": 2353004544,
+  "migration_restore_epochs": 5,
+  "allocated_reduction_bytes_each_epoch": 2246632960,
+  "pressure_lifecycle_success_responses": 6,
+  "additional_semantic_probe_success_responses": 5,
+  "response_choices_and_semantic_usage_equal_between_arms": true,
+  "session_prompt_tokens": 219992,
+  "session_restored_cached_tokens": 219904,
+  "reference_arm": "same session retention and target CPU tier, without active latent migration",
+  "scope": "Exact saved synthetic requests and source. Controller owner reports independent offline audit passed.",
+  "limits": [
+    "Active-layout SSE cancellation not established by short cancellation D",
+    "Driver-pressure admission policy not live qualified",
+    "Checkpoint eviction/allocation-failure live paths pending",
+    "General losslessness, speedup, larger capacity, concurrent requests and reboot behavior not established",
+    "Allocated reduction is not reserved-memory or external driver-free release"
+  ],
+  "raw_machine_evidence_redistributed": false
+}
