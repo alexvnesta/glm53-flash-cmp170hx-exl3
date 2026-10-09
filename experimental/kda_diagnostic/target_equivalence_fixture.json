@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "purpose": "Same loaded TP target allocations; cold DFlash2 versus cold target-only exact continuation comparison.",
+  "default_repeats": 3,
+  "requests": {
+    "arithmetic": {
+      "model": "glm",
+      "temperature": 0,
+      "top_p": 1,
+      "seed": 170,
+      "reasoning_effort": "low",
+      "max_tokens": 128,
+      "stream": false,
+      "store": false,
+      "messages": [
+        {
+          "role": "user",
+          "content": "CONTROL_ARITHMETIC_17_23\nWhat is 17 multiplied by 23? Give the integer result."
+        }
+      ]
+    },
+    "counting": {
+      "model": "glm",
+      "temperature": 0,
+      "top_p": 1,
+      "seed": 170,
+      "reasoning_effort": "low",
+      "max_tokens": 128,
+      "stream": false,
+      "store": false,
+      "messages": [
+        {
+          "role": "user",
+          "content": "CONTROL_COUNTING_1_1000\nWrite integers 1 through 1000, one per line."
+        }
+      ]
+    },
+    "lru": {
+      "model": "glm",
+      "temperature": 0,
+      "top_p": 1,
+      "seed": 170,
+      "reasoning_effort": "low",
+      "max_tokens": 128,
+      "stream": false,
+      "store": false,
+      "messages": [
+        {
+          "role": "user",
+          "content": "CONTROL_LRU_CONCURRENCY\nAnalyze a concurrent LRU cache where two workers call get and evict while a third cancels an in-flight fill. Give a rigorous race analysis, invariants, linearization points, and minimal failure interleavings for naive designs. Use ten detailed sections."
+        }
+      ]
+    },
+    "lookup": {
+      "model": "glm",
+      "temperature": 0,
+      "top_p": 1,
+      "seed": 170,
+      "reasoning_effort": "low",
+      "max_tokens": 128,
+      "stream": false,
+      "store": false,
+      "messages": [
+        {
+          "role": "user",
+          "content": "CONTROL_DISTINCT_EARLY_PREFIX\nRead this small inventory: shelf R4 has 12 copper bolts; shelf T9 has 7 zinc nuts; shelf W2 has 31 steel washers. Return only the shelf code containing zinc nuts."
+        }
+      ]
+    }
+  },
+  "scope_limits": [
+    "Greedy API messages, reasoning, finish reasons and completion counts are compared in full.",
+    "Cold-repeat instability is reported as indeterminate.",
+    "Q1 autoregressive versus Q8 DFlash verification may have floating-point differences; output mismatch alone does not identify a verifier bug.",
+    "This fixture is separate from both long-prefix qualification fixtures."
+  ]
+}

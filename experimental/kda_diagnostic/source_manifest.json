@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "service_base": "4ef85ea656c743fb4e1c332b219da41e3143bc33",
+  "engine_source_base": "16a49792a3c93d8432d72e6c4bce800841566577",
+  "status": "Optional standalone diagnostic; service defaults and engine sources unchanged",
+  "core_files_unchanged_from_frozen_v3": {
+    "kda_actual_hook.py": "69c1769d78e1b9d6ab9d8a42637a139f91fff9965bed0aeaad44a7ba2daad5e2",
+    "kda_projection_probe.py": "f61f1abf44e634e21be03ced8eab8843041b9fad312c0217131d53cf3e7b521d",
+    "launch_actual_kda.py": "ea3005cd67783fcc8774bff24b21674433852145c002d6433ea1bbccddb78f60",
+    "sitecustomize.py": "2859c8e8f0ca5f8fe7b633d5eb55be7aeaf00276f1a66c8591915d421b06aa74",
+    "kda_trial_benchmark.py": "2941d60e8c64a5f3c150148dc1ac51bec3fd3acb97e7a898280e2d6d2cc8f7d8",
+    "run_cpu_tests.py": "a9dfeb622c236c3e7efab5664cc1cfdbd8fbe022a092715a351f00bf6509b34c"
+  },
+  "copied_tests_and_saved_fixtures": {
+    "test_kda_actual_hook.py": "86a33b56943b6ae0e2f0f0058111c6253f409d0881f58e590b7accf438f55aa4",
+    "test_kda_projection_probe.py": "4b50e9d9918c46c6f42702ba1c1acd65a62a38198dfa6f34a37efca1421b66d2",
+    "kda_request_fixture.json": "7e23050b30b0bae8f02e8f5ab4bdaebbac09325cea2dd7bdb2b5160237088dfc",
+    "target_equivalence_fixture.json": "4f8e06dcf5354491f9a7bd29fe1a55c8ed23909fe3e68f54049b39076ce09f0d"
+  },
+  "projection_fixture_sha256": "7f8aeb457247b0fdeb0b7291a1fd2978e4342404eed0e67008b99bafa80807b7",
+  "engine_source_pins": {
+    "exllamav3/modules/gated_delta_net.py": "8017a2e75eed98fb46945543ea2f42637d3a390bf42c12a724f5e8ad04375374",
+    "exllamav3/util/tensor.py": "d49d599e6a64a2dbc235c6ecf153c78dc635e9111ab7302f2317d94b9365c931",
+    "exllamav3/modules/attention_fn/bc_attn.py": "561ed1de5d76cff176c84afa7a26fa35697a174ae0d0d1b30ae2c6863cc7ee13",
+    "exllamav3/generator/generator.py": "e49340011fbc19447bfdc592b6c739638cfd59220074fa4f97863c7c07f0cb86",
+    "exllamav3/modules/linear.py": "249616b34108d1ad40bc995a64f6999bc65a3c8842e38c52a95e024188fa3a94",
+    "exllamav3/modules/quant/exl3.py": "3f285c0a34d4bee9bd1ccbbc476036254f8427f1c7279583efad9b1ca4b1eddf",
+    "exllamav3/exllamav3_ext/quant/exl3_gemm.cu": "1754f22a4dcbd9a732121e5bb6e079bff4d7ec54005a8d8e19b610fd5ff30598",
+    "exllamav3/exllamav3_ext/quant/exl3_gemm.cuh": "606ec462784d2550707df83e052447d111ad9d59ae64806dd272ef2f898a0b9f",
+    "exllamav3/exllamav3_ext/quant/exl3_kernel_map.cu": "8a026efbede0d439019c5db95a744fdb0e49ef1cfea847aa30e3595f6e87f6ea",
+    "exllamav3/exllamav3_ext/quant/exl3_kernel_map.cuh": "68afe01ded6198adf74dd124f0cd151fe536f918c0067ed77844e34e7688b20e",
+    "exllamav3/exllamav3_ext/bindings.cpp": "7b339aafb233ad39dd86d0ef139c7d0eaeed67ffb078761a959b64fa4fb230f1"
+  },
+  "validation_expected": {
+    "cpu_contracts": 68,
+    "cuda_initialized": false
+  },
+  "exclusions": [
+    "Native binaries",
+    "Model weights",
+    "Engine source copies",
+    "Machine units and service controllers",
+    "Private traces and receipts",
+    "Generated Python bytecode"
+  ],
+  "runtime_limits": [
+    "LS-only; TP/exported state refused",
+    "Projection opt-in defaults off",
+    "Direct non-graph first-row comparison",
+    "Native bias add excluded",
+    "No model parity, numerical cure, shape-only causality, or performance claim"
+  ]
+}

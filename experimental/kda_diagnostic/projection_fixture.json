@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "purpose": "Private LS-only request-scoped actual-model KDA Q1/Q8 diagnostic; request bodies unchanged from the four-case target fixture.",
+  "default_repeats": 2,
+  "cases": [
+    {
+      "id": "arithmetic",
+      "request": {
+        "model": "glm",
+        "temperature": 0,
+        "top_p": 1,
+        "seed": 170,
+        "reasoning_effort": "low",
+        "max_tokens": 128,
+        "stream": false,
+        "store": false,
+        "messages": [
+          {
+            "role": "user",
+            "content": "CONTROL_ARITHMETIC_17_23\nWhat is 17 multiplied by 23? Give the integer result."
+          }
+        ]
+      }
+    }
+  ]
+}
