@@ -83,3 +83,36 @@ leases, return/rebind before checkpoint/page lifecycle operations,
 collective-safe failures and separate live qualification. This inactive tier
 preserves completed sessions while target working tensors remain on GPU. It
 does not increase simultaneous active requests or the configured context limit.
+
+## Reproducible portable tests and qualification limits
+
+```sh
+python scripts/run_tp_cpu_tests.py --engine-root /PATH/C8666FB_ENGINE
+python scripts/run_cpu_tests.py --engine-root /PATH/STOCK_16A_ENGINE
+python scripts/run_http_cpu_tests.py
+```
+
+The TP suite passes 61 contracts on the exact current engine source. The separate
+LS regression passes 112 contracts on stock16a; those original source fences
+have not been loosened to accept dev. HTTP-only checks use a separate pinned
+Starlette/AnyIO environment, documented in `http_lifecycle.md`. All Torch CPU
+runs confirm CUDA remains uninitialized.
+
+Engine base is official dev `6cd89a908d957afba1cd1659fcf7d99a9e56d776`;
+experimental engine head is `c8666fbbc58d8731b97b972cedf681d0953beddd`.
+Service plumbing head before admission/response cleanup is
+`7b526ec`, based on published service `f18c0a7`. New helper source pins are
+recorded in `docs/publication_source_scope.json`. Use an extension compiled from
+the exact engine C++ tree. A successful native build or CPU suite alone is not
+a full-service ABI, CUDA worker, IPC cleanup or inference qualification.
+
+TP DFlash2 stays explicit and default-off. Historical request-matched profile
+comparisons used TP+BC1+joint GEMV settings versus LS+BC0+ordinary GEMV settings,
+with different whole choices and reasoning/output allocation. Those are profile
+throughput observations, not isolated-kernel speedups or equivalent work.
+Target-only versus DFlash continuation has stable full-output mismatches on
+bounded fixtures. Actual-layer diagnostics localized some Q1/Q8 arithmetic
+differences but did not establish a universal parity fix. The current-dev
+combined session path needs a new exact-source live trial; older legacy TP
+receipts do not qualify its native ABI or host-transfer lifecycle. No lossless
+upstream TP PR is proposed by this branch.

@@ -3,10 +3,17 @@
 Full-VRAM serving stack for **GLM-5.3-Flash** with **DFlash2 K7 speculative
 decoding**, tuned for two 64 GB GPUs with **no P2P support** (e.g. CMP 170HX
 mining cards). It also runs stock **MTP d2** as an alternative speculation
-mode. ExLlamaV3 sources are not modified; every engine adjustment here is a
-process-local monkeypatch that is enabled only while this server runs.
+mode. Ordinary LS serving uses process-local adaptations. The optional experimental
+TP path requires the matching patched engine and native build described below.
 
 English README (this file) · [한국어 README](README.ko.md)
+
+The publication candidate adds [bounded HTTP admission and response cleanup](docs/http_lifecycle.md).
+The default single-request GPU ownership remains in place.
+
+The optional [TP session path](docs/tp_session_cache.md) requires a matching
+experimental engine checkout. It is separate from the validated LS configuration
+below and does not establish general speculative continuation equivalence.
 
 ## What is included
 
