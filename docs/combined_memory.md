@@ -86,10 +86,11 @@ The measured activation policy was `context_threshold`, threshold 131072.
 The short unfinished cancellation D followed by cached B recovery passed, but
 D did not qualify cancellation while latent host aliases were active. The
 separate lifecycle supplement below covers active-layout cancellation, a normal
-recurrent-checkpoint return and both measured pressure-policy branches. Failure
-injection and broader eviction/allocation-failure paths remain pending. This
-bounded pass establishes neither general losslessness nor a throughput/capacity
-or boot guarantee.
+recurrent-checkpoint return and both measured pressure-policy branches. A later
+pre-copy fail-stop supplement below qualifies one deliberate return failure.
+Mid-transfer faults and broader eviction/allocation-failure paths remain pending.
+This bounded pass establishes neither general losslessness nor a
+throughput/capacity or boot guarantee.
 The controller owner supplied this result and reports its independent offline
 audit passed. [qualification_summary.json](qualification_summary.json) records
 the sanitized geometry; raw journals, process metadata and binaries stay out
@@ -144,6 +145,52 @@ normal prefix-cache profile, unchanged sources and native input, original argv,
 no shadow Python path, exclusive GPU/listener ownership and a visible smoke
 reply. This is a timestamped post-trial snapshot, not persistent experimental
 activation or reboot evidence. There was one run per condition, with no repeated
-performance or general losslessness claim. An intentional one-shot GPU-return
-fault remains pending; it must separately establish fail-stop health, rejection
-of further generation, exact owned shutdown and original-service restoration.
+performance or general losslessness claim. The pre-copy fail-stop supplement
+below separately qualifies one intentional return fault. The earlier lifecycle
+processes did not exercise a failure, and broader failure paths remain separate.
+
+## Separate pre-copy fail-stop supplement, 2026-10-09
+
+A fourth fresh diagnostic process deliberately failed its first GPU return
+before the original adapter's drain, allocations or copies. Its source-pinned
+runtime and native inputs were unchanged. The full offline receipt/custody audit
+passed 51 of 51 checks; 16 CPU negative contracts against copied actual receipts
+also pass. The reviewer authored the adapter and diagnostic wrapper; the
+controller owner alone operated the live test. Raw machine evidence and the
+process-only injection are excluded from this repository.
+
+The exact 16528-token ledger migrated once into `HOST_ACTIVE` epoch 1. At its
+first return, the one-shot wrapper recorded `original_deactivate_called=false`,
+kept the same host epoch/worker and suspended target tier, and published
+`FAILED`. A retry on that failed owner was actually refused before delegation.
+There was no successful GPU return or additional migration after the fault.
+
+The first generation POST returned HTTP 500. Health then returned HTTP 503,
+and the next generation POST returned HTTP 503. The pinned API's failed-worker
+gate precedes `AsyncJob` creation; no direct native job-construction counter was
+captured. The rejection and source-bound gate are the stated refusal proof.
+The failed layout requires process stop and restart, not in-process continuation.
+
+Application shutdown reported the expected failed-layout close error and
+`Application shutdown failed. Exiting.` The raw journal preserves that error;
+this is not a graceful adapter close. The captured process family nevertheless
+exited under the reviewed owned stop, and the pre-registered independent guard
+restored the original service. Fresh source/native/argv, process ownership,
+exclusive GPU/listener, idle normal prefix-cache and visible `4`/`stop` checks
+passed after restoration. No persistent activation or reboot was tested.
+
+The initial health independently proved full cache 393216/context 392960,
+chunk/checkpoint 2048, workspace margin 128, Q8, K7/ring 8192, combined LS mode
+and request-accounted budgets. Actual environment receipts captured BC0,
+fixed-draft/statistics settings, cache mode and request admission settings;
+they do not observe every declared environment variable. The lone migration
+again replaced 2353004544 B of latent payload, requested 3137339392 B inside a
+3221225472 B budget and reduced summed live tensor allocation by 2246632960 B.
+The GPU indexer stayed resident. Failed aliases were held until process exit.
+
+This qualifies only one explicit failure before copies. It does not test faults
+midway through DMA, return-allocation exhaustion, checkpoint eviction failure,
+general losslessness, speedup, increased context capacity or concurrent GPU
+decode. Budgets remain separate owned requests/accounts, not a hard process-RAM
+or allocator-cache ceiling. Active host migration remains an opt-in LS mode;
+TP active-host support is not implemented.
