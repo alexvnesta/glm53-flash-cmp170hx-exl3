@@ -24,6 +24,8 @@ API = ROOT / 'glm/glm_api.py'
 sys.path.insert(0, str(ROOT/'glm'))
 from glm_dflash_options import DFlashOptions
 from glm_session_options import session_options
+from glm_tp_options import tp_dflash_options, tp_dflash_health
+from glm_tp_lifecycle import tp_lifecycle
 TREE = ast.parse(API.read_text())
 
 
@@ -36,7 +38,9 @@ def api_scope(runtime):
     scope = dict(runtime=runtime, PREFILL_PAGE_SIZE=256, sys=sys, os=os, asyncio=asyncio,
                  Path=Path, time=time, json=json, KERNELS_DIR=ROOT, CONTEXT_RESERVE=256,
                  MODEL_ID='glm', GENERATION_DEFAULTS={}, cache_format=lambda: 'Q8',
-                 DFlashOptions=DFlashOptions, session_options=session_options)
+                 DFlashOptions=DFlashOptions, session_options=session_options,
+                 tp_dflash_options=tp_dflash_options, tp_dflash_health=tp_dflash_health,
+                 tp_lifecycle=tp_lifecycle)
     class TemplateEnvironment:
         def __init__(self, **kwargs): self.filters = {}
         def from_string(self, text): return text

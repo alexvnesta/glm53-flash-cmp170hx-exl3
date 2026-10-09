@@ -30,8 +30,9 @@ def session_options(args):
         raise ValueError("Choose --dflash-session-cache or --dflash-prefix-cache")
     if enabled and (getattr(args, "mtp", False) or not getattr(args, "draft_model_dir", None)):
         raise ValueError("--dflash-session-cache requires a DFlash2 drafter")
-    if enabled and getattr(args, "tensor_parallel", False):
-        raise ValueError("Multi-session retention is currently qualified only for layer split")
+    if (enabled and getattr(args, "tensor_parallel", False)
+            and getattr(args, "experimental_dflash2_tp", False) is not True):
+        raise ValueError("TP session retention requires the explicit experimental DFlash2 TP opt-in")
     if target and not enabled:
         raise ValueError("--target-cpu-cache-gib requires --dflash-session-cache")
     return SessionOptions(bool(enabled), target * GIB, recurrent * GIB, paired * GIB, checkpoints)

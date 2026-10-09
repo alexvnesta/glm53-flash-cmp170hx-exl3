@@ -30,6 +30,7 @@ from glm_tools import prepare_tools, ToolSplitter
 from glm_paths import KERNELS_DIR, HCFUSE_ENV, HCFUSE_CHECK_ENV
 from glm_session_options import session_options
 from glm_tp_options import tp_dflash_options, tp_dflash_health
+from glm_tp_lifecycle import tp_lifecycle
 from glm_dflash_options import DFlashOptions, summarize_draft_stats
 
 runtime = {}
@@ -184,59 +185,69 @@ async def lifespan(app):
     print(f"Loading GLM: GPU 0+1, full VRAM, {method} + k_hcfuse", flush=True)
     model, config, cache, tokenizer, draft_model, _, draft_cache = model_init.init(
         args, quiet=True, progress=False)
-    if tp_opt_in:
-        if (not model.loaded_tp or draft_model is None
-                or getattr(draft_model.config, "experimental_tensor_parallel", False) is not True):
-            raise ValueError("The engine did not enable the requested typed TP DFlash2 configuration")
-    sys.path.insert(0, str(KERNELS_DIR))
-    import k_hcfuse
-    k_hcfuse.install(model)
-    if dflash:
-        if not draft_model.caps.get("dflash_draft") or draft_model.config.block_size != 8:
-            raise ValueError("This API requires a DFlash2 block-size-8 drafter")
-        from glm_dflash import preserve_fused_exports
-        preserve_fused_exports(model)
-    env = ImmutableSandboxedEnvironment(trim_blocks=True, lstrip_blocks=True,
-                                       extensions=["jinja2.ext.loopcontrols"])
-    env.filters["tojson"] = lambda value, **kwargs: json.dumps(value, **kwargs)
-    template = env.from_string((Path(args.model_dir) / "chat_template.jinja").read_text())
-    runtime.update(tokenizer=tokenizer, config=config, template=template,
-                   lock=asyncio.Lock(), loaded_at=int(time.time()),
-                   context_length=min(config.max_position_embeddings,
-                                      args.cache_size - CONTEXT_RESERVE))
-    from glm_async import responsive_generator_class
-    runtime["generator"] = responsive_generator_class(AsyncGenerator)(
-        model=model, cache=cache, tokenizer=tokenizer, sampler=GreedySampler(),
-        draft_model=draft_model, draft_cache=draft_cache,
-        num_draft_tokens=args.num_draft_tokens, max_batch_size=1,
-        max_chunk_size=serving_chunk_size, recurrent_checkpoint_interval=2048,
-        recurrent_cache_size=retention.recurrent_bytes,
-        **draft_options.generator_kwargs(num_draft_tokens=args.num_draft_tokens))
-    runtime["draft_options"] = draft_options
-    if retention.enabled:
-        from glm_dflash_sessions import enable_session_cache
-        enable_session_cache(runtime["generator"].generator,
-                             max_bytes=retention.paired_bytes,
-                             max_checkpoints=retention.max_checkpoints,
-                             target_cpu_bytes=retention.target_cpu_bytes,
-                             namespace=str(Path(args.model_dir).resolve()))
-        print("GLM DFlash2: bounded completed-session retention enabled; "
-              f"target CPU tier ceiling {retention.target_cpu_bytes} bytes (pins only on page eviction)", flush=True)
-    if dflash and getattr(args, "dflash_prefix_cache", False):
-        from glm_dflash_prefix import enable_prefix_cache
-        enable_prefix_cache(runtime["generator"].generator)
-        print("GLM DFlash2: previous-request prefix cache enabled (paired host snapshots)", flush=True)
-    print(f"GLM ready: http://0.0.0.0:{args.port}/v1 · context {runtime['context_length']} "
-          f"· cache {args.cache_size}", flush=True)
-    try:
-        yield
-    finally:
+    async with tp_lifecycle(tp_opt_in, model, draft_model) as owned_tp:
+        if tp_opt_in:
+            if (not model.loaded_tp or draft_model is None
+                    or getattr(draft_model.config, "experimental_tensor_parallel", False) is not True):
+                raise ValueError("The engine did not enable the requested typed TP DFlash2 configuration")
+        sys.path.insert(0, str(KERNELS_DIR))
+        import k_hcfuse
+        k_hcfuse.install(model)
+        if dflash:
+            if not draft_model.caps.get("dflash_draft") or draft_model.config.block_size != 8:
+                raise ValueError("This API requires a DFlash2 block-size-8 drafter")
+            from glm_dflash import preserve_fused_exports
+            preserve_fused_exports(model)
+        env = ImmutableSandboxedEnvironment(trim_blocks=True, lstrip_blocks=True,
+                                           extensions=["jinja2.ext.loopcontrols"])
+        env.filters["tojson"] = lambda value, **kwargs: json.dumps(value, **kwargs)
+        template = env.from_string((Path(args.model_dir) / "chat_template.jinja").read_text())
+        runtime.update(tokenizer=tokenizer, config=config, template=template,
+                       lock=asyncio.Lock(), loaded_at=int(time.time()),
+                       context_length=min(config.max_position_embeddings,
+                                          args.cache_size - CONTEXT_RESERVE))
+        from glm_async import responsive_generator_class
+        runtime["generator"] = responsive_generator_class(AsyncGenerator)(
+            model=model, cache=cache, tokenizer=tokenizer, sampler=GreedySampler(),
+            draft_model=draft_model, draft_cache=draft_cache,
+            num_draft_tokens=args.num_draft_tokens, max_batch_size=1,
+            max_chunk_size=serving_chunk_size, recurrent_checkpoint_interval=2048,
+            recurrent_cache_size=retention.recurrent_bytes,
+            **draft_options.generator_kwargs(num_draft_tokens=args.num_draft_tokens))
+        if tp_opt_in:
+            owned_tp["generator"] = runtime["generator"]
+        runtime["draft_options"] = draft_options
+        if retention.enabled:
+            if tp_opt_in:
+                from glm_tp_sessions import enable_session_cache
+            else:
+                from glm_dflash_sessions import enable_session_cache
+            enable_session_cache(runtime["generator"].generator,
+                                 max_bytes=retention.paired_bytes,
+                                 max_checkpoints=retention.max_checkpoints,
+                                 target_cpu_bytes=retention.target_cpu_bytes,
+                                 namespace=str(Path(args.model_dir).resolve()))
+            print("GLM DFlash2: bounded completed-session retention enabled; "
+                  f"target CPU tier ceiling {retention.target_cpu_bytes} bytes (pins only on page eviction)", flush=True)
+        if dflash and getattr(args, "dflash_prefix_cache", False):
+            if tp_opt_in:
+                from glm_tp_prefix import enable_prefix_cache
+            else:
+                from glm_dflash_prefix import enable_prefix_cache
+            enable_prefix_cache(runtime["generator"].generator)
+            print("GLM DFlash2: previous-request prefix cache enabled (paired host snapshots)", flush=True)
+        print(f"GLM ready: http://{getattr(args, 'host', '0.0.0.0')}:{args.port}/v1 · context {runtime['context_length']} "
+              f"· cache {args.cache_size}", flush=True)
         try:
-            await runtime["generator"].close()
+            yield
         finally:
-            manager = getattr(runtime["generator"].generator, "_glm_dflash_prefix_cache", None)
-            if retention.enabled and manager is not None:
-                manager.close()
+            if not tp_opt_in:
+                try:
+                    await runtime["generator"].close()
+                finally:
+                    manager = getattr(runtime["generator"].generator, "_glm_dflash_prefix_cache", None)
+                    if retention.enabled and manager is not None:
+                        manager.close()
 
 
 app = FastAPI(title="GLM-5.3-Flash EXL3 API", version="1.0", lifespan=lifespan,
@@ -534,6 +545,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     model_init.add_args(parser, cache=True, add_draft_model_args=True, default_chunk_size=2048)
     parser.add_argument("--port", type=int, default=PORT)
+    parser.add_argument("--host", default="0.0.0.0", help="Bind address; use 127.0.0.1 for private qualification")
     parser.add_argument("--prefill-chunk-size", type=int,
                         default=os.environ.get("GLM53_PREFILL_CHUNK_SIZE"),
                         help="Cap serving prefill chunks independently of loader/autosplit --chunk_size "
@@ -547,7 +559,7 @@ if __name__ == "__main__":
     parser.add_argument("--dflash-prefix-cache", action="store_true",
                         help="Opt in to previous-request DFlash prefix reuse with paired host snapshots")
     parser.add_argument("--dflash-session-cache", action="store_true",
-                        help="Experimental bounded multi-session paired prefix retention (LS, one active request)")
+                        help="Experimental bounded paired prefix retention (LS or explicitly opted-in TP; one active request)")
     parser.add_argument("--target-cpu-cache-gib", type=int, default=0,
                         help="Target-only idle page spill ceiling in GiB; 0 disables; pins page slabs only on eviction")
     parser.add_argument("--recurrent-cache-gib", type=int, default=4,
@@ -559,6 +571,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
     try:
         prefill_chunk_size(args)
+        tp_dflash_options(args)
         session_options(args)
         DFlashOptions.from_environment()
     except ValueError as error:
@@ -575,4 +588,4 @@ if __name__ == "__main__":
     runtime["args"] = args
     # k_hcfuse gates itself on this flag; glm_api always calls install() explicitly.
     os.environ.setdefault(HCFUSE_ENV, "1")
-    uvicorn.run(app, host="0.0.0.0", port=args.port, timeout_graceful_shutdown=5)
+    uvicorn.run(app, host=args.host, port=args.port, timeout_graceful_shutdown=5)

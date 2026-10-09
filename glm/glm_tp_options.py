@@ -12,8 +12,6 @@ def tp_dflash_options(args):
     if enabled:
         if target_tp is not True or not dflash:
             raise ValueError("--experimental-dflash2-tp requires -tp and a DFlash2 drafter")
-        if getattr(args, "dflash_session_cache", False) or getattr(args, "target_cpu_cache_gib", 0):
-            raise ValueError("This TP launch profile does not yet support multi-session or CPU-tier retention")
         if getattr(args, "cpu_cache_size", 0):
             raise ValueError("Generic CPUPageCache also includes the draft ring; TP profile requires cpu_cache_size=0")
     return enabled

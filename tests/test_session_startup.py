@@ -235,17 +235,17 @@ class SessionStartup(unittest.TestCase):
     def test_api_retention_gate_leaves_default_off_constructor_unchanged(self):
         tree = ast.parse((REPO / "glm/glm_api.py").read_text())
         lifespan = next(n for n in tree.body if isinstance(n, ast.AsyncFunctionDef) and n.name == "lifespan")
-        construction = next(n.value for n in lifespan.body if isinstance(n, ast.Assign)
+        construction = next(n.value for n in ast.walk(lifespan) if isinstance(n, ast.Assign)
                             and isinstance(n.value, ast.Call) and isinstance(n.value.func, ast.Call)
                             and isinstance(n.value.func.func, ast.Name) and n.value.func.func.id == "responsive_generator_class")
         self.assertNotIn("enable_defrag", [k.arg for k in construction.keywords])
-        gate = next(n for n in lifespan.body if isinstance(n, ast.If)
+        gate = next(n for n in ast.walk(lifespan) if isinstance(n, ast.If)
                     and isinstance(n.test, ast.Attribute) and isinstance(n.test.value, ast.Name)
                     and n.test.value.id == "retention" and n.test.attr == "enabled")
         program = ast.Module(body=[gate], type_ignores=[])
         ns = dict(runtime={"generator":NS(generator=self.f.g)},
                   retention=NS(enabled=False, paired_bytes=1024**2, max_checkpoints=8, target_cpu_bytes=2*8192),
-                  args=NS(model_dir="/ABS/MODEL"), Path=Path)
+                  args=NS(model_dir="/ABS/MODEL"), Path=Path, tp_opt_in=False)
         with redirect_stdout(io.StringIO()):
             exec(compile(ast.fix_missing_locations(program), "glm_api.py", "exec"), ns)
         self.assertIs(self.f.g.enable_defrag, True)
