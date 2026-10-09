@@ -206,4 +206,7 @@ from the original Hugging Face repos at their pinned revisions.
 
 ## License
 
+Experimental active selected-latent RAM overflow is available through a separate,
+disabled-by-default launcher. See [its scope and qualification instructions](docs/active_host_kv.md).
+
 MIT — see [LICENSE](LICENSE).
