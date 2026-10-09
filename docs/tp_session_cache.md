@@ -70,9 +70,9 @@ not asynchronous DMA, graphs, full-model parity or performance. The TP HTTP
 pilot saves exact requests and raw responses, then performs cold A/B, resume A,
 unrelated cold C, resume B, real SSE cancellation D and recovery B. It requires
 actual host spill/restoration and matching full choices/semantic token counts.
-Start with 65,536 target-cache tokens and two approximately 40,000-token sessions.
-For 393,216/220,000 use a 2GiB target budget initially and confirm that reported
-slot capacity exceeds the required overflow pages. The current-dev engine/API has bounded live prefix-mode qualification described below. The later 64Ki multi-session pressure pilot restored retained prefixes but failed a following cold-marker semantic check, documented below.
+The earlier 65,536-token target-cache pilot is semantically unsupported after fresh controls reproduced its marker failure before pressure.
+For 393,216/220,000 use a 2 GiB target budget initially and confirm that reported
+slot capacity exceeds the required overflow pages. The current-dev engine/API has bounded prefix-mode qualification below and a separate [full 384Ki completed-session result](tp_full 384_session_qualification.md). The 64Ki failure remains documented and is not qualified by either full-profile result.
 
 Active sparse-latent host migration remains unsupported in TP. The LS adapter
 binds actual layer tensors/native attention objects in one process; TP places
@@ -111,7 +111,7 @@ with different whole choices and reasoning/output allocation. Those are profile
 throughput observations, not isolated-kernel speedups or equivalent work.
 Target-only versus DFlash continuation has stable full-output mismatches on
 bounded fixtures. Actual-layer diagnostics localized some Q1/Q8 arithmetic
-differences but did not establish a universal parity fix. The current-dev multi-session pressure tier needs further diagnosis after its bounded 64Ki pilot failed a following semantic check; older legacy TP receipts do not qualify that host-transfer lifecycle. No lossless
+differences but did not establish a universal parity fix. The 64Ki profile still needs diagnosis. The later full 393216-token profile has separate bounded host-transfer/lifecycle qualification; older legacy TP receipts alone do not qualify it. No lossless
 upstream TP PR is proposed by this branch.
 
 ## Current-dev prefix-mode live result, 2026-10-09
@@ -132,8 +132,7 @@ also differed in TP, BC and GEMV settings. The roughly 28–29% observed profile
 gain is descriptive; it does not establish isolated-kernel speedup, equal work,
 complete count/LRU answers, general quality or speculative losslessness.
 
-This campaign used previous-request prefix mode. The newly combined TP
-multi-session target CPU-pressure tier is not qualified by this prefix-mode pass. Its later 64Ki pilot failed a following semantic check, as recorded below. The controller owner supplied the live result. Sanitized geometry
+This campaign used previous-request prefix mode. The combined TP multi-session target CPU-pressure tier was not qualified by this prefix-mode pass alone. A subsequent full 384Ki lifecycle passed separately; its 64Ki profile still failed as recorded below. The controller owner supplied the live result. Sanitized geometry
 and source/build pins are in [qualification_summary.json](qualification_summary.json);
 raw machine logs, IPC paths, binaries and process receipts are excluded.
 
@@ -152,10 +151,12 @@ pieces. This is an observed malformed answer, not a transport failure or a
 successful semantic check. The full 384Ki pressure stage was skipped, and the
 original service was restored at 2026-10-09T17:16:46Z.
 
-The cause is unresolved. No direct paired snapshot or target CPU fetch occurred
-on that failing cold request according to the recorded counters; that alone
-does not prove the tier was uninvolved or identify a numerical/state cause.
+The cause is unresolved. Fresh matched64Ki controls with retention disabled and enabled produced the same complete malformed marker answer before pressure and afterward. Retained state or CPU-page restore is therefore not a necessary cause. This does not isolate a numerical/layout cause.
 Do not promote multi-session TP as generally qualified, lossless or a universal
 performance upgrade from the prefix-mode and retention passes. Keep this
 failure visible during diagnosis and require matched fresh controls before
 attributing it to a particular layer of the implementation.
+
+## Full 384Ki completed-session follow-up
+
+The separate [full 384Ki follow-up](tp_full 384_session_qualification.md) preserves the fresh64Ki cold-control failure and earlier malformed distributed fixture. Its calibrated replacement and complete pressure/semantic/throughput/IPC/restoration replay passed the final audit. No runtime source change or general losslessness claim is introduced.

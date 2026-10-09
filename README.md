@@ -11,9 +11,7 @@ English README (this file) · [한국어 README](README.ko.md)
 The publication candidate adds [bounded HTTP admission and response cleanup](docs/http_lifecycle.md).
 The default single-request GPU ownership remains in place.
 
-The optional [TP session path](docs/tp_session_cache.md) requires a matching
-experimental engine checkout. It is separate from the validated LS configuration
-below and does not establish general speculative continuation equivalence.
+The optional [TP session path](docs/tp_session_cache.md) requires a matching experimental engine checkout. Its [full 384Ki bounded qualification](docs/tp_full 384_session_qualification.md) is separate from the LS configuration below; the 64Ki profile and general speculative continuation equivalence remain unsupported.
 
 ## What is included
 

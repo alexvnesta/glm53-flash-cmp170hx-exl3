@@ -2,7 +2,7 @@
   "engine_source_scope": "c8666fbbc58d8731b97b972cedf681d0953beddd",
   "excluded": "models, weights, native binaries, copied dependency headers, JIT caches, raw machine evidence and remote/service controllers",
   "license": "MIT",
-  "qualification": "Bounded prefix-mode native/model result; multi-session64Ki pilot later failed a cold-marker semantic check. Full384Ki pressure stage skipped. CPU/source contracts remain distinct.",
+  "qualification": "Bounded full393216 TP prefix and paired-session target-overflow lifecycle passed.64Ki cold controls remain semantically failed. Docs/fixture successor preserves all runtime hashes.",
   "runtime_sha256": {
     "glm/glm_admission.py": "f79671cd20df02db89c5341e4391ead413494cede45a73e17b6ba75d70f729dc",
     "glm/glm_api.py": "6ee16410d83d78adfa3dcfcba4883b6d27bcd2dcb139b2bf2c11bfb4aef43db7",
