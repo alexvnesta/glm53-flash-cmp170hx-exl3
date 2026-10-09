@@ -1,0 +1,37 @@
+{
+  "engine_source_scope": "16a49792a3c93d8432d72e6c4bce800841566577",
+  "excluded": "models, weights, native binaries, copied dependency headers, JIT caches, raw machine evidence and remote/service controllers",
+  "experimental_runtime_sha256": {
+    "experimental/active_host/attention_safety.py": "e1f74b1c783d19e2e955644bd38253412a4ed7db0adca6a12be7afbf66a0e8f1",
+    "experimental/active_host/contracts.py": "e4568d3ae386a337799a27282cb7654b41c6f7138d860bd73a02353a383cc0db",
+    "experimental/active_host/engine_adapter.py": "7414cd8a8c8f06403a1b225d46c8bba6237b6509de752f89e0a7a1bc3b5864e9",
+    "experimental/active_host/engine_inputs.py": "dc4ef6a80b531a03059b83203fbd56daad6cee606849c89ae59e81982caea2ca",
+    "experimental/active_host/native/selected_host_q8.cpp": "6ffef8bc7e1f70cbe6c11b92b74da40bedbcbd8bc268c0946f5e4b02370a5213",
+    "experimental/active_host/native/selected_host_q8.cu": "9cd8ca57aea0885e5657c4a32111d2a831886e4ef01981133552152b4966a62a",
+    "experimental/active_host/run_trial.py": "e49b7f06d8b83054185fc2d660759ba7cbaadc65e0a5316c94210b6dfbd123ee",
+    "experimental/active_host/selected_host_q8.py": "336639a4dfaf096d97abd86e3c9f5e6d1cd192df77a3cd2233e95fb627542051"
+  },
+  "license": "MIT",
+  "qualification": "Bounded live scope in qualification_summary.json; portable CPU/source scope remains distinct.",
+  "runtime_sha256": {
+    "glm/glm_admission.py": "f79671cd20df02db89c5341e4391ead413494cede45a73e17b6ba75d70f729dc",
+    "glm/glm_api.py": "1f0192595e6e62f2467acfa7371cc32f03b01f522f6f6e43497d4ebaa8bb9b30",
+    "glm/glm_async.py": "45f3cc0462c650908608441d41ce7da9eeb0b6a33b9e3643bcbf8125847f18ac",
+    "glm/glm_dflash.py": "7257046869a9b2baaf86cb89141993b10f3365338fa7b5854616cace1f4e9431",
+    "glm/glm_dflash_options.py": "42ebe691b811f983c75faac64cc39b764bebe0aa8e018189262bc03e022d5703",
+    "glm/glm_dflash_prefix.py": "d7b5ffae6dd0ea3b3a701d6c61364c8899f94191f13983c6575182bad0acfa86",
+    "glm/glm_dflash_sessions.py": "0929b2371e30039c1b57d9d281a079f132326757a68aef45937a06cec210c718",
+    "glm/glm_memory_coordinator.py": "8299403a03cad586dee8ce869b9daf993caf6e5bfd6232f1d56c2fbe63daad34",
+    "glm/glm_paths.py": "f370db9770fefadd53e36e6400f1031e1665839155a9d75a5726be78d7d3cde9",
+    "glm/glm_pin_budget.py": "ccd8905e6b41e50c002b081d2fc000ab84951dd9af8298efb3d2a344b6cf6df7",
+    "glm/glm_profile.py": "9765085b6b2eb32aa9b43c8f617de37dad1b759c6957ea909c967cc713e57659",
+    "glm/glm_q8_layout.py": "34834ba4bb08fcf5fcf18d272f011c4f7c2812f179654ea0559ed9f11a035c5a",
+    "glm/glm_q8_staging.py": "660f36b7506f6657a864d9bd50257db2cb44d9057b917307aff385f235bc2c11",
+    "glm/glm_response_cleanup.py": "61379a3b677dd518688445956e54d6e4b4e61a8da5c35d7dadf8f3b05217f62e",
+    "glm/glm_session_options.py": "a82e46f67b81210a466c0e71c2effdbe92091b7d83303edf5ac061de148c4a0f",
+    "glm/glm_target_cpu_cache.py": "1090b1fb4982949c9a581abbbc74132f8b5d4ac2b576e431cbe6d979c8e49344",
+    "glm/glm_tools.py": "598d0ac0a9c058e6968b634952c63fab7d5bbe6b45b80a2c7800daa650f20e29",
+    "glm/glm_worker_cleanup.py": "a1c7ea9c6c54da02c182e314967dc9676f345a19c31a7df84b9157f934f5a672"
+  },
+  "service_base": "e7eaf660709ebdf3a2e8fa5f761295242e6f18f9"
+}
