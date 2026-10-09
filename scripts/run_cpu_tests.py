@@ -20,7 +20,13 @@ def main():
     env["GLM53_CPU_DUPLICATE_RECYCLE"]="0"
     program="""import unittest,json,torch
 before=torch.cuda.is_initialized()
-result=unittest.TextTestRunner(verbosity=2).run(unittest.defaultTestLoader.discover('tests'))
+loader=unittest.TestLoader()
+suite=unittest.TestSuite()
+from pathlib import Path
+for path in sorted(Path('tests').glob('test_*.py')):
+    if not path.name.startswith('test_tp_'):
+        suite.addTests(loader.discover('tests',pattern=path.name))
+result=unittest.TextTestRunner(verbosity=2).run(suite)
 after=torch.cuda.is_initialized()
 print(json.dumps({'tests':result.testsRun,'passed':result.wasSuccessful(),
                   'cuda_initialized_before':before,'cuda_initialized_after':after}))

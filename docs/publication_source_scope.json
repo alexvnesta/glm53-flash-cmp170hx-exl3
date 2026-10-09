@@ -1,0 +1,29 @@
+{
+  "engine_source_scope": "c8666fbbc58d8731b97b972cedf681d0953beddd",
+  "excluded": "models, weights, native binaries, copied dependency headers, JIT caches, raw machine evidence and remote/service controllers",
+  "license": "MIT",
+  "qualification": "Bounded full393216 TP prefix and paired-session target-overflow lifecycle passed.64Ki cold controls remain semantically failed. Docs/fixture successor preserves all runtime hashes.",
+  "runtime_sha256": {
+    "glm/glm_admission.py": "f79671cd20df02db89c5341e4391ead413494cede45a73e17b6ba75d70f729dc",
+    "glm/glm_api.py": "6ee16410d83d78adfa3dcfcba4883b6d27bcd2dcb139b2bf2c11bfb4aef43db7",
+    "glm/glm_async.py": "45f3cc0462c650908608441d41ce7da9eeb0b6a33b9e3643bcbf8125847f18ac",
+    "glm/glm_dflash.py": "7257046869a9b2baaf86cb89141993b10f3365338fa7b5854616cace1f4e9431",
+    "glm/glm_dflash_options.py": "42ebe691b811f983c75faac64cc39b764bebe0aa8e018189262bc03e022d5703",
+    "glm/glm_dflash_prefix.py": "d7b5ffae6dd0ea3b3a701d6c61364c8899f94191f13983c6575182bad0acfa86",
+    "glm/glm_dflash_sessions.py": "65386ec35adebddd217971ff780474dcfd18335dc5bb75470b77ed738a6c0f74",
+    "glm/glm_paths.py": "f370db9770fefadd53e36e6400f1031e1665839155a9d75a5726be78d7d3cde9",
+    "glm/glm_profile.py": "9765085b6b2eb32aa9b43c8f617de37dad1b759c6957ea909c967cc713e57659",
+    "glm/glm_q8_layout.py": "34834ba4bb08fcf5fcf18d272f011c4f7c2812f179654ea0559ed9f11a035c5a",
+    "glm/glm_q8_staging.py": "660f36b7506f6657a864d9bd50257db2cb44d9057b917307aff385f235bc2c11",
+    "glm/glm_response_cleanup.py": "61379a3b677dd518688445956e54d6e4b4e61a8da5c35d7dadf8f3b05217f62e",
+    "glm/glm_session_options.py": "81e563671d3e48a9360a1b07a77f9df4e979540b18309d0853c0db1faac29c94",
+    "glm/glm_target_cpu_cache.py": "f85fcee04e15305c35589d6808a3b0320b693f80bfdb13f737899d15de85b69a",
+    "glm/glm_tools.py": "598d0ac0a9c058e6968b634952c63fab7d5bbe6b45b80a2c7800daa650f20e29",
+    "glm/glm_tp_cpu_cache.py": "5e5a817d7c065e70edbbfad72f2b2f7ea58a644d3e244d93f789579640b90b2a",
+    "glm/glm_tp_lifecycle.py": "edacda17e00106635754fba2c5a8ddcd76f58d9d990992e6dc3e77bd2172d0e5",
+    "glm/glm_tp_options.py": "aa1897485d67dbf6da6028b54bad7fcc01ef93bd2372444ea21d2628ac467ca1",
+    "glm/glm_tp_prefix.py": "1f4eedd151343201a2e6d77d5e8ee95a4b701cda684dc53ba700cc851d974679",
+    "glm/glm_tp_sessions.py": "9a071507c39dea045cc83732b8c33ae618389bfaf91cd89449bbc77525814015"
+  },
+  "service_base": "f18c0a72e9711b532c879408d00dc945a0a9ae8d"
+}
