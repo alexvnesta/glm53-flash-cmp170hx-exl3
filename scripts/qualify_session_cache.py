@@ -17,6 +17,18 @@ def dump(path, value):
     path.write_text(json.dumps(value, indent=2, ensure_ascii=False) + "\n")
 
 
+def campaign_geometry(cache_tokens=65536, session_content_tokens=40000, request_timeout=180):
+    if type(cache_tokens) is not int or cache_tokens < 8192 or cache_tokens % 256:
+        raise ValueError("--cache-tokens must be a page-aligned integer of at least 8192")
+    context = cache_tokens - 256
+    if (type(session_content_tokens) is not int
+            or not context // 2 < session_content_tokens < context - 512):
+        raise ValueError("Session content must exceed half the usable cache and leave 512 tokens of context headroom")
+    if type(request_timeout) is not int or not 1 <= request_timeout <= 600:
+        raise ValueError("--request-timeout must be an integer from 1 through 600 seconds")
+    return context
+
+
 def signature(response):
     choice=response['choices'][0]
     usage=response['usage']
@@ -27,20 +39,23 @@ def signature(response):
 
 
 class Client:
-    def __init__(self,base,out):
+    def __init__(self,base,out,request_timeout=180):
         u=urllib.parse.urlparse(base)
         if u.scheme!='http' or u.hostname not in ('127.0.0.1','localhost') or u.port in (None,8012):
             raise ValueError('Use an explicit private loopback port; production port 8012 is refused')
         self.host,self.port=u.hostname,u.port
         self.out=out
+        if type(request_timeout) is not int or not 1 <= request_timeout <= 600:
+            raise ValueError("Invalid bounded request timeout")
+        self.request_timeout=request_timeout
         self.serial=0
 
-    def request(self,method,path,payload=None,tag='request',timeout=180):
+    def request(self,method,path,payload=None,tag='request',timeout=None):
         self.serial+=1
         prefix=f'{self.serial:03d}_{tag}'
         raw=None if payload is None else json.dumps(payload,ensure_ascii=False).encode()
         if raw is not None: (self.out/(prefix+'_request.json')).write_bytes(raw)
-        c=http.client.HTTPConnection(self.host,self.port,timeout=timeout)
+        c=http.client.HTTPConnection(self.host,self.port,timeout=self.request_timeout if timeout is None else timeout)
         try:
             c.request(method,path,body=raw,headers={'Content-Type':'application/json'})
             r=c.getresponse(); body=r.read()
@@ -57,7 +72,7 @@ class Client:
         payload={**payload,'stream':True,'ignore_eos':True,'max_tokens':8192}
         raw=json.dumps(payload,ensure_ascii=False).encode()
         (self.out/'cancel_request.json').write_bytes(raw)
-        c=http.client.HTTPConnection(self.host,self.port,timeout=180)
+        c=http.client.HTTPConnection(self.host,self.port,timeout=self.request_timeout)
         frames=[]
         try:
             c.request('POST','/v1/chat/completions',body=raw,headers={'Content-Type':'application/json'})
@@ -66,7 +81,7 @@ class Client:
                                             'path':'/v1/chat/completions'})
             if r.status!=200: raise RuntimeError(f'Cancel stream HTTP {r.status}')
             started=time.monotonic()
-            while len(frames)<64 and time.monotonic()-started<180:
+            while len(frames)<64 and time.monotonic()-started<self.request_timeout:
                 line=r.readline()
                 if not line: raise RuntimeError('Stream ended before cancellation')
                 frames.append(line.decode())
@@ -101,11 +116,11 @@ def content(label,rows):
     return '\n'.join(lines)
 
 
-def build_fixture(client):
+def build_fixture(client,session_content_tokens=40000):
     requests={}
     measured={}
-    for label,target in (('A',40000),('B',40000),('C',4096),('D',2048)):
-        lo,hi=1,2000
+    for label,target in (('A',session_content_tokens),('B',session_content_tokens),('C',4096),('D',2048)):
+        lo,hi=1,max(2000,target//10)
         for attempt in range(14):
             rows=(lo+hi)//2
             text=content(label,rows)
@@ -127,11 +142,12 @@ def build_fixture(client):
     return fixture
 
 
-def qualify(client,fixture):
+def qualify(client,fixture,cache_tokens=65536,session_content_tokens=40000):
+    context=campaign_geometry(cache_tokens,session_content_tokens)
     h=client.health('initial_health')
     pc=h.get('prompt_cache') or {}
     tier=pc.get('target_cpu_tier') or {}
-    assert h['cache_tokens']==65536 and h['context_length']==65280, 'Pilot requires a 64Ki target cache'
+    assert h['cache_tokens']==cache_tokens and h['context_length']==context, 'Campaign target cache geometry mismatch'
     assert pc.get('mode')=='multi_session' and not h['busy'], 'Fresh idle session candidate required'
     assert pc['completed_checkpoints']==0 and pc['hits']==0, 'Cold pilot cannot reuse an earlier campaign'
     assert tier.get('reservation_policy')=='pressure_demand_pinned_slabs', 'Demand-only host allocation required'
@@ -144,7 +160,9 @@ def qualify(client,fixture):
         signature(r)
         cached=r['usage']['prompt_tokens_details']['cached_tokens']
         assert (cached>0)==warm, f'{tag}: unexpected cached prefix'
-        if label in ('A','B'): assert 39000<r['usage']['prompt_tokens']<42000
+        if label in ('A','B'):
+            n=r['usage']['prompt_tokens']
+            assert max(context//2,session_content_tokens-1000)<n<min(context-128,session_content_tokens+2000)
         responses[tag]=r
         h=client.health(tag+'_health');pc=h['prompt_cache'];tier=pc['target_cpu_tier']
         assert not h['busy'] and h['status']=='ok'
@@ -163,7 +181,8 @@ def qualify(client,fixture):
     assert signature(recovered)==signature(responses['cold_B']), 'B output mismatch after cancellation'
     final=client.health('final_health')
     assert final['status']=='ok' and not final['busy']
-    return {'qualified':True,'scope':'64Ki LS target; inactive target-only CPU spill; exact saved requests',
+    return {'qualified':True,'scope':'LS target; inactive target-only CPU spill; exact saved requests',
+            'cache_tokens':cache_tokens,'session_content_tokens':session_content_tokens,
             'steps':rows,'cancel_recovery_cached_tokens':recovered['usage']['prompt_tokens_details']['cached_tokens'],
             'final_health':final}
 
@@ -173,18 +192,26 @@ def main():
     p.add_argument('--base-url',default='http://127.0.0.1:8013')
     p.add_argument('--out',type=Path,required=True)
     p.add_argument('--fixture',type=Path)
+    p.add_argument('--cache-tokens',type=int,default=65536)
+    p.add_argument('--session-content-tokens',type=int,default=40000)
+    p.add_argument('--request-timeout',type=int,default=180)
     p.add_argument('--run',action='store_true',help='Explicitly execute private HTTP tokenization/inference')
     args=p.parse_args()
     if not args.run: p.error('Pass --run only after an isolated candidate owns the private test port')
+    try: campaign_geometry(args.cache_tokens,args.session_content_tokens,args.request_timeout)
+    except ValueError as error: p.error(str(error))
     args.out.mkdir(parents=True,exist_ok=False)
-    client=Client(args.base_url,args.out)
+    client=Client(args.base_url,args.out,args.request_timeout)
     try:
-        fixture=json.loads(args.fixture.read_text()) if args.fixture else build_fixture(client)
+        fixture=json.loads(args.fixture.read_text()) if args.fixture else build_fixture(client,args.session_content_tokens)
         if args.fixture:
             dump(args.out/'fixture.json',fixture)
             (args.out/'fixture.sha256').write_text(
                 hashlib.sha256((args.out/'fixture.json').read_bytes()).hexdigest()+'\n')
-        report=qualify(client,fixture)
+        lengths=fixture["tokenized_content_lengths"]
+        if any(abs(lengths[label]-args.session_content_tokens)>40 for label in ("A","B")):
+            raise ValueError("Saved fixture content lengths do not match --session-content-tokens")
+        report=qualify(client,fixture,args.cache_tokens,args.session_content_tokens)
     except BaseException as exc:
         dump(args.out/'report.json',{'qualified':False,'error':repr(exc)})
         raise
